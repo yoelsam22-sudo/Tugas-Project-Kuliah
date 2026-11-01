@@ -3,12 +3,12 @@ import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot
 
 // === TEMPEL firebaseConfig LU DI SINI (ganti 3 baris ISI_DARI_FIREBASE) ===
 const firebaseConfig = {
-  apiKey: "ISI_DARI_FIREBASE",
+  apiKey: "AIzaSyA_JfZNfuGsBJ6TOpH7mDZP9u9Tsrgnyt8",
   authDomain: "lensakita-studio.firebaseapp.com",
   projectId: "lensakita-studio",
   storageBucket: "lensakita-studio.firebasestorage.app",
-  messagingSenderId: "ISI_DARI_FIREBASE",
-  appId: "ISI_DARI_FIREBASE"
+  messagingSenderId: "804201114610",
+  appId: "1:804201114610:web:deade9df4890f4188fd96b"
 };
 // ==========================================================================
 
