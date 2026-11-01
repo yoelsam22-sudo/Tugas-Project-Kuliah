@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LensaKita Studio | Jasa Foto & Videografi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#beranda"><span class="brand-icon">LK</span><span>LensaKita <small>PHOTO & FILM</small></span></a>
+    <nav>
+      <a href="#layanan">Layanan</a><a href="#pesan">Pesan</a><a href="#artikel">Artikel</a><a href="#admin">Dashboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="beranda">
+      <div class="hero-copy">
+        <p class="eyebrow">MOMEN BERHARGA, CERITA SELAMANYA</p>
+        <h1>Setiap momen punya <em>cerita.</em><br>Abadikan bersama kami.</h1>
+        <p class="hero-desc">Jasa fotografi dan videografi untuk acara, wisuda, prewedding, produk, dan kebutuhan konten bisnis.</p>
+        <div class="hero-actions"><a class="btn primary" href="#pesan">Pesan Sekarang</a><a class="btn ghost" href="#layanan">Lihat Paket</a></div>
+        <div class="hero-stats"><div><strong>4+</strong><span>Paket layanan</span></div><div><strong>Fleksibel</strong><span>Jadwal pemotretan</span></div><div><strong>HD</strong><span>Hasil berkualitas</span></div></div>
+      </div>
+      <div class="hero-art">
+        <div class="photo photo-back"><span>YOUR STORY, OUR FRAME</span></div>
+        <div class="photo photo-front"><div class="camera-mark">◉</div><span>CAPTURE THE MOMENT</span></div>
+        <div class="floating-note">✦ Moments that matter</div>
+      </div>
+    </section>
+
+    <section class="section" id="layanan">
+      <div class="section-heading"><div><p class="eyebrow">PILIH KEBUTUHANMU</p><h2>Paket layanan</h2></div><p>Harga simulasi untuk kebutuhan tugas. Paket dapat dipilih saat melakukan pemesanan.</p></div>
+      <div class="package-grid" id="packageGrid"></div>
+    </section>
+
+    <section class="booking-section" id="pesan">
+      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Isi data dan pilih metode pembayaran internal untuk simulasi transaksi.</p></div>
+      <div class="booking-layout">
+        <form id="bookingForm" class="panel form-panel">
+          <label>Nama pelanggan<input id="customerName" required placeholder="Nama lengkap"></label>
+          <label>Email / nomor WhatsApp<input id="customerContact" required placeholder="Email atau nomor WhatsApp"></label>
+          <label>Pilih paket<select id="packageSelect" required></select></label>
+          <label>Tanggal layanan<input id="serviceDate" type="date" required></label>
+          <label>Catatan kebutuhan<textarea id="notes" rows="3" placeholder="Lokasi, tema, atau kebutuhan tambahan..."></textarea></label>
+          <div class="price-line"><span>Total pesanan</span><strong id="bookingPrice">Rp0</strong></div>
+          <button class="btn primary full" type="submit">Buat Pesanan & Invoice</button>
+          <p class="tiny">Demo tugas: transaksi disimpan di browser ini, tidak memotong saldo atau mengirim uang sungguhan.</p>
+        </form>
+        <div class="panel how-panel">
+          <span class="step-icon">01</span><h3>Pilih paket</h3><p>Tentukan layanan sesuai kebutuhan dan tanggal acara.</p>
+          <span class="step-icon">02</span><h3>Pilih pembayaran</h3><p>Setelah pesanan dibuat, pilih simulasi pembayaran tunai atau transfer internal.</p>
+          <span class="step-icon">03</span><h3>Cetak invoice</h3><p>Invoice dapat dicetak atau disimpan sebagai PDF dari menu cetak browser.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section article-section" id="artikel">
+      <div class="section-heading"><div><p class="eyebrow">TIPS DARI LENSAKITA</p><h2>Artikel & informasi</h2></div></div>
+      <div class="article-grid">
+        <article class="article-card"><div class="article-visual visual-one">01 / MOMENT</div><div class="article-body"><p class="eyebrow">FOTOGRAFI</p><h3>Tips memilih fotografer untuk acara</h3><p>Sesuaikan gaya foto, portofolio, paket, dan jumlah jam kerja dengan kebutuhan acara. Diskusikan juga hasil akhir yang akan diterima.</p></div></article>
+        <article class="article-card"><div class="article-visual visual-two">02 / STORY</div><div class="article-body"><p class="eyebrow">VIDEOGRAFI</p><h3>Kenapa video dokumentasi itu penting?</h3><p>Video membantu mengabadikan suasana, suara, dan detail acara sehingga kenangan dapat dilihat kembali dengan lebih hidup.</p></div></article>
+        <article class="article-card"><div class="article-visual visual-three">03 / PRODUCT</div><div class="article-body"><p class="eyebrow">KONTEN BISNIS</p><h3>Foto produk yang menarik pelanggan</h3><p>Pencahayaan yang rapi, latar yang sesuai, dan sudut pengambilan yang tepat membuat produk terlihat lebih jelas dan profesional.</p></div></article>
+      </div>
+    </section>
+
+    <section class="dashboard-section" id="admin">
+      <div class="section-heading"><div><p class="eyebrow">AREA ADMIN</p><h2>Dashboard transaksi</h2></div><p>Data transaksi berasal dari pemesanan di browser ini.</p></div>
+      <div class="dashboard-toolbar panel">
+        <label>Filter laporan<select id="reportFilter"><option value="all">Semua transaksi</option><option value="week">7 hari terakhir</option><option value="month">Bulan ini</option></select></label>
+        <div class="toolbar-buttons"><button class="btn secondary" id="exportCsv">Unduh CSV</button><button class="btn ghost" id="clearData">Hapus data demo</button></div>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card"><span>Total transaksi</span><strong id="totalTransactions">0</strong></div>
+        <div class="summary-card"><span>Pendapatan dibayar</span><strong id="totalRevenue">Rp0</strong></div>
+        <div class="summary-card"><span>Belum dibayar</span><strong id="unpaidTotal">Rp0</strong></div>
+      </div>
+      <div class="panel table-panel">
+        <div class="table-title"><h3>Daftar transaksi</h3><span id="reportRange">Semua periode</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Paket</th><th>Tanggal</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="transactionRows"><tr><td colspan="7" class="empty">Belum ada transaksi. Buat pesanan terlebih dahulu.</td></tr></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="manual-section section" id="manual">
+      <p class="eyebrow">PANDUAN PENGGUNA</p><h2>Manual book singkat</h2>
+      <div class="manual-grid">
+        <div><strong>01. Pelanggan</strong><p>Buka bagian Pesan, isi nama dan kontak, pilih paket serta tanggal, lalu klik “Buat Pesanan & Invoice”.</p></div>
+        <div><strong>02. Pembayaran</strong><p>Di invoice yang muncul, pilih “Bayar sekarang”. Pilih Tunai atau Transfer Internal, kemudian konfirmasi pembayaran simulasi.</p></div>
+        <div><strong>03. Cetak invoice</strong><p>Klik “Cetak Invoice”. Pada dialog printer, pilih printer atau “Save as PDF”.</p></div>
+        <div><strong>04. Laporan keuangan</strong><p>Buka Dashboard, pilih semua transaksi, 7 hari terakhir, atau bulan ini. Unduh CSV untuk membuka laporan di Excel.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><a class="brand" href="#beranda"><span class="brand-icon">LK</span><span>LensaKita <small>PHOTO & FILM</small></span></a><p>© 2026 LensaKita Studio — Project website fotografi & videografi.</p><a href="#manual">Manual Book</a></footer>
+
+  <div class="modal-backdrop" id="invoiceModal" aria-hidden="true">
+    <div class="invoice-sheet">
+      <div class="modal-actions"><button class="btn ghost" id="closeInvoice">Tutup</button><button class="btn secondary" id="printInvoice">Cetak Invoice</button></div>
+      <div id="invoiceContent"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="script.js"></script>
+</body>
+</html>
