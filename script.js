@@ -40,6 +40,170 @@ function invoiceNumber(){return "LK-"+new Date().getFullYear()+String(Date.now()
 function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showToast(message){$("toast").textContent=message;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
 
+/* ================= EFEK VISUAL ================= */
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const rnd = (a,b) => a + Math.random()*(b-a);
+
+// satu gelembung: muncul di (x,y) lalu melayang ke arah (dx,dy) dan hilang
+function spawnBubble(x,y,{size=rnd(10,28),dx=0,dy=0,duration=900}={}){
+  if(reduceMotion)return;
+  const el=document.createElement("span");
+  el.className="bubble";
+  el.style.cssText=`left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
+  document.body.appendChild(el);
+  const anim=el.animate([
+    {transform:"translate(-50%,-50%) scale(.3)",opacity:.95},
+    {transform:`translate(calc(-50% + ${dx*.6}px),calc(-50% + ${dy*.6}px)) scale(1)`,opacity:.9,offset:.55},
+    {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.25)`,opacity:0}
+  ],{duration,easing:"cubic-bezier(.2,.7,.3,1)"});
+  anim.onfinish=()=>el.remove();
+}
+
+// ledakan gelembung ke segala arah
+function burstBubbles(x,y,count=16,small=false){
+  if(reduceMotion)return;
+  for(let i=0;i<count;i++){
+    const angle=rnd(0,Math.PI*2);
+    const dist=small?rnd(30,75):rnd(55,140);
+    spawnBubble(x,y,{
+      size:small?rnd(6,16):rnd(8,28),
+      dx:Math.cos(angle)*dist,
+      dy:Math.sin(angle)*dist-18,
+      duration:rnd(700,1200)
+    });
+  }
+}
+
+// confetti jatuh (dipakai saat pembayaran Lunas)
+function confetti(x,y,count=40){
+  if(reduceMotion)return;
+  const colors=["#526b50","#d79a64","#e3b68a","#8fae8b","#f2d9b8","#344a35"];
+  for(let i=0;i<count;i++){
+    const el=document.createElement("span");
+    el.className="confetti";
+    const w=rnd(6,11),h=rnd(8,16);
+    el.style.cssText=`left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${colors[i%colors.length]}`;
+    document.body.appendChild(el);
+    const dx=rnd(-220,220),up=rnd(80,200),down=rnd(220,420),rot=rnd(-540,540);
+    const anim=el.animate([
+      {transform:"translate(-50%,-50%) rotate(0deg)",opacity:1},
+      {transform:`translate(calc(-50% + ${dx*.6}px),calc(-50% - ${up}px)) rotate(${rot*.5}deg)`,opacity:1,offset:.35},
+      {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${down}px)) rotate(${rot}deg)`,opacity:0}
+    ],{duration:rnd(1200,1900),easing:"cubic-bezier(.25,.6,.4,1)"});
+    anim.onfinish=()=>el.remove();
+  }
+}
+
+// kartu paket dipilih / diklik
+function onPackageClick(card,x,y){
+  burstBubbles(x,y,20);
+  if(isAdmin)return; // admin tidak memesan, cukup efek saja
+  const p=packages.find(pk=>pk.id===card.dataset.id);if(!p)return;
+  $("packageSelect").value=p.id;
+  $("bookingPrice").textContent=money(p.price);
+  syncSelectedCard();
+  showToast(`${p.name} dipilih. Lanjut isi form pemesanan ya!`);
+}
+function syncSelectedCard(){
+  const v=$("packageSelect").value;
+  document.querySelectorAll(".package-card").forEach(c=>c.classList.toggle("selected",!!v&&c.dataset.id===v));
+}
+
+function setupPackageEffects(){
+  let last=0;
+  document.querySelectorAll(".package-card").forEach(card=>{
+    card.addEventListener("mousemove",e=>{
+      const r=card.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
+      card.style.setProperty("--mx",(px*100)+"%");
+      card.style.setProperty("--my",(py*100)+"%");
+      if(reduceMotion)return;
+      card.style.transform=`perspective(700px) rotateX(${(.5-py)*8}deg) rotateY(${(px-.5)*8}deg) translateY(-4px)`;
+      const now=performance.now();
+      if(now-last>70){ // gelembung mengikuti kursor
+        last=now;
+        spawnBubble(e.clientX,e.clientY,{size:rnd(6,15),dx:rnd(-18,18),dy:-rnd(40,85),duration:rnd(900,1400)});
+      }
+    });
+    card.addEventListener("mouseleave",()=>{card.style.transform=""});
+    card.addEventListener("click",e=>onPackageClick(card,e.clientX,e.clientY));
+    card.addEventListener("keydown",e=>{
+      if(e.key!=="Enter"&&e.key!==" ")return;
+      e.preventDefault();
+      const r=card.getBoundingClientRect();
+      onPackageClick(card,r.left+r.width/2,r.top+r.height/2);
+    });
+  });
+}
+
+// elemen muncul halus saat di-scroll
+function setupReveal(){
+  if(reduceMotion||!("IntersectionObserver" in window))return;
+  const targets=document.querySelectorAll(".section-heading,.package-card,.article-card,.manual-grid > div,.booking-layout > *,.summary-card");
+  const io=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      if(!en.isIntersecting)return;
+      const el=en.target;io.unobserve(el);
+      el.classList.add("in");
+      setTimeout(()=>el.classList.remove("reveal","in"),1300);
+    });
+  },{threshold:.12});
+  targets.forEach(el=>{
+    const idx=Array.from(el.parentElement.children).indexOf(el);
+    el.classList.add("reveal");
+    el.style.setProperty("--d",((idx%4)*0.09)+"s");
+    io.observe(el);
+  });
+}
+
+function setupHeroEffects(){
+  const hero=document.querySelector(".hero"),art=document.querySelector(".hero-art");
+  if(!hero||reduceMotion)return;
+  // gelembung melayang di background hero
+  const wrap=document.createElement("div");wrap.className="hero-bubbles";
+  for(let i=0;i<16;i++){
+    const s=document.createElement("span"),size=rnd(10,46);
+    s.style.cssText=`left:${rnd(0,100)}%;width:${size}px;height:${size}px;animation-duration:${rnd(9,18)}s;animation-delay:${-rnd(0,16)}s`;
+    wrap.appendChild(s);
+  }
+  hero.prepend(wrap);
+  // foto hero bergeser pelan mengikuti mouse
+  hero.addEventListener("mousemove",e=>{
+    const r=hero.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    art.style.transform=`translate3d(${x*-18}px,${y*-14}px,0)`;
+  });
+  hero.addEventListener("mouseleave",()=>{art.style.transform=""});
+}
+
+function setupGlobalEffects(){
+  // progress bar scroll + bayangan navbar
+  const bar=document.createElement("div");bar.id="scrollBar";document.body.appendChild(bar);
+  const topbar=document.querySelector(".topbar");
+  const onScroll=()=>{
+    const h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    bar.style.width=(max>0?(h.scrollTop/max)*100:0)+"%";
+    topbar.classList.toggle("scrolled",h.scrollTop>10);
+  };
+  addEventListener("scroll",onScroll,{passive:true});onScroll();
+
+  // cahaya lembut mengikuti kursor (hanya perangkat dengan mouse)
+  if(window.matchMedia("(hover:hover)").matches&&!reduceMotion){
+    const glow=document.createElement("div");glow.className="cursor-glow";document.body.appendChild(glow);
+    addEventListener("mousemove",e=>{glow.style.transform=`translate(${e.clientX-150}px,${e.clientY-150}px)`;glow.style.opacity=1},{passive:true});
+    document.addEventListener("mouseleave",()=>{glow.style.opacity=0});
+  }
+
+  // gelembung kecil saat klik tombol
+  document.addEventListener("click",e=>{
+    const b=e.target.closest(".btn,.nav-login,.table-action,.link-btn");
+    if(!b)return;
+    const r=b.getBoundingClientRect();
+    const x=e.clientX||r.left+r.width/2,y=e.clientY||r.top+r.height/2;
+    burstBubbles(x,y,8,true);
+  });
+}
+
 /* ================= AUTH ADMIN ================= */
 function openLogin(){$("loginModal").classList.add("show");$("loginModal").setAttribute("aria-hidden","false");$("loginEmail").focus()}
 function closeLogin(){$("loginModal").classList.remove("show");$("loginModal").setAttribute("aria-hidden","true");$("loginForm").reset()}
@@ -85,11 +249,11 @@ onAuthStateChanged(auth,user=>{
 
 /* ================= PAKET & PEMESANAN ================= */
 function renderPackages(){
-  $("packageGrid").innerHTML=packages.map((p,i)=>`<article class="package-card ${i===2?"featured":""}">${p.tag?`<span class="package-tag">${p.tag}</span>`:""}<span class="package-number">0${i+1}</span><h3>${p.name}</h3><p>${p.desc}</p><div class="package-price">${money(p.price)} <small>/ paket</small></div></article>`).join("");
+  $("packageGrid").innerHTML=packages.map((p,i)=>`<article class="package-card ${i===2?"featured":""}" data-id="${p.id}" tabindex="0" role="button" aria-label="Pilih paket ${p.name}">${p.tag?`<span class="package-tag">${p.tag}</span>`:""}<span class="package-number">0${i+1}</span><h3>${p.name}</h3><p>${p.desc}</p><div class="package-price">${money(p.price)} <small>/ paket</small></div></article>`).join("");
   $("packageSelect").innerHTML='<option value="">Pilih paket layanan</option>'+packages.map(p=>`<option value="${p.id}">${p.name} — ${money(p.price)}</option>`).join("");
 }
 function selectedPackage(){return packages.find(p=>p.id===$("packageSelect").value)}
-$("packageSelect").addEventListener("change",()=>{$("bookingPrice").textContent=money(selectedPackage()?.price||0)});
+$("packageSelect").addEventListener("change",()=>{$("bookingPrice").textContent=money(selectedPackage()?.price||0);syncSelectedCard()});
 $("serviceDate").min=todayISO();
 $("bookingForm").addEventListener("submit",e=>{
   e.preventDefault();
@@ -98,7 +262,7 @@ $("bookingForm").addEventListener("submit",e=>{
   const tx={id:invoiceNumber(),name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date:$("serviceDate").value,notes:$("notes").value.trim(),createdAt:new Date().toISOString(),status:"Belum dibayar",method:"-",paidAt:null};
   localTx.set(tx.id,tx);
   setDoc(doc(db,"transaksi",tx.id),tx).catch(err=>{console.error(err);showToast("Gagal menyimpan ke database.")});
-  openInvoice(tx.id,tx);$("bookingForm").reset();$("bookingPrice").textContent=money(0);showToast("Pesanan berhasil dibuat. Invoice siap dilihat.");
+  openInvoice(tx.id,tx);$("bookingForm").reset();$("bookingPrice").textContent=money(0);syncSelectedCard();showToast("Pesanan berhasil dibuat. Invoice siap dilihat.");
 });
 
 /* ================= INVOICE ================= */
@@ -111,110 +275,3 @@ $("printInvoice").addEventListener("click",()=>window.print());
 // QR simulasi (bukan QRIS asli): pola dibuat dari nomor invoice
 function fakeQrSvg(seed){
   const N=25,cell=8;let h=2166136261;
-  for(const c of seed){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}
-  const rand=()=>{h^=h<<13;h^=h>>>17;h^=h<<5;return (h>>>0)/4294967296};
-  const inFinder=(r,c)=>[[0,0],[0,N-7],[N-7,0]].some(([fr,fc])=>r>=fr-1&&r<=fr+7&&c>=fc-1&&c<=fc+7);
-  let rects="";
-  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
-    if(inFinder(r,c))continue;
-    if(rand()>0.52)rects+=`<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}"/>`;
-  }
-  const finder=(fr,fc)=>`<rect x="${fc*cell}" y="${fr*cell}" width="${7*cell}" height="${7*cell}"/><rect x="${(fc+1)*cell}" y="${(fr+1)*cell}" width="${5*cell}" height="${5*cell}" fill="#fff"/><rect x="${(fc+2)*cell}" y="${(fr+2)*cell}" width="${3*cell}" height="${3*cell}"/>`;
-  return `<svg viewBox="0 0 ${N*cell} ${N*cell}" xmlns="http://www.w3.org/2000/svg" fill="#111" role="img" aria-label="QR simulasi"><rect width="100%" height="100%" fill="#fff"/>${rects}${finder(0,0)}${finder(0,N-7)}${finder(N-7,0)}</svg>`;
-}
-function fmtCountdown(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
-
-function renderInvoice(tx){
-  clearInterval(qrTimer);
-  const date=new Date(tx.createdAt).toLocaleDateString("id-ID",{day:"2-digit",month:"long",year:"numeric"});
-  const serviceDate=new Date(tx.date+"T00:00:00").toLocaleDateString("id-ID",{day:"2-digit",month:"long",year:"numeric"});
-  const paid=tx.status==="Lunas";
-  if(!paid&&!qrExpiry.has(tx.id))qrExpiry.set(tx.id,Date.now()+15*60*1000);
-  $("invoiceContent").innerHTML=`
-    <div class="invoice-head"><div><span class="invoice-label">INVOICE / ${escapeHtml(tx.id)}</span><h2>LensaKita Studio</h2><p>Jasa Fotografi & Videografi<br>Dokumentasi momen berharga Anda.</p></div><div>${paid?'<span class="paid-stamp">LUNAS</span>':'<span class="invoice-label">MENUNGGU PEMBAYARAN</span>'}<p>Tanggal invoice: ${date}<br>Tanggal layanan: ${serviceDate}</p></div></div>
-    <div class="invoice-meta"><div><h4>Ditagihkan kepada</h4><strong>${escapeHtml(tx.name)}</strong><p>${escapeHtml(tx.contact)}</p></div><div><h4>Detail pesanan</h4><strong>${escapeHtml(tx.packageName)}</strong><p>${escapeHtml(tx.notes||"Tidak ada catatan tambahan.")}</p></div></div>
-    <table><thead><tr><th>Deskripsi</th><th>Jumlah</th><th>Harga</th></tr></thead><tbody><tr><td>${escapeHtml(tx.packageName)}</td><td>1 paket</td><td>${money(tx.price)}</td></tr></tbody></table>
-    <div class="invoice-total"><span>Total pembayaran</span><strong>${money(tx.price)}</strong></div>
-    <p class="invoice-note">Status: <strong>${escapeHtml(tx.status)}</strong>${paid?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi dan bukan transaksi uang sungguhan.</p>
-    ${paid?"":`<div class="payment-box">
-      <h3>Pembayaran (simulasi)</h3>
-      <div class="payment-controls">
-        <select id="paymentMethod">
-          <option value="QRIS">QRIS (simulasi)</option>
-          <option value="Transfer Internal">Transfer Internal (simulasi)</option>
-          <option value="Tunai">Tunai</option>
-        </select>
-      </div>
-      <div class="qris-box" id="qrisBox">
-        <div class="qris-head"><strong>QRIS</strong><span>LENSAKITA STUDIO</span></div>
-        <div class="qris-code">${fakeQrSvg(tx.id)}</div>
-        <div class="qris-amount">${money(tx.price)}</div>
-        <p class="qris-timer">Berlaku <strong id="qrisTimer">15:00</strong> <button type="button" class="link-btn" id="refreshQr">Perbarui QR</button></p>
-        <p class="invoice-note">Ini QR simulasi untuk tugas, tidak bisa dibayar lewat aplikasi bank/e-wallet asli. Klik tombol di bawah untuk mensimulasikan pelanggan sudah scan & bayar.</p>
-      </div>
-      <button class="btn primary" id="confirmPayment">Simulasikan Scan & Bayar</button>
-    </div>`}
-  `;
-  if(paid)return;
-  const select=$("paymentMethod"),qrisBox=$("qrisBox"),btn=$("confirmPayment");
-  const sync=()=>{
-    const isQris=select.value==="QRIS";
-    qrisBox.hidden=!isQris;
-    btn.textContent=isQris?"Simulasikan Scan & Bayar":"Konfirmasi Pembayaran";
-  };
-  select.addEventListener("change",sync);sync();
-  btn.addEventListener("click",()=>payInvoice(tx.id));
-  const tick=()=>{
-    const left=qrExpiry.get(tx.id)-Date.now(),t=$("qrisTimer");if(!t)return;
-    if(left<=0){t.textContent="KEDALUWARSA";if(select.value==="QRIS")btn.disabled=true;return}
-    t.textContent=fmtCountdown(left);
-  };
-  $("refreshQr").addEventListener("click",()=>{qrExpiry.set(tx.id,Date.now()+15*60*1000);btn.disabled=false;tick();showToast("QR diperbarui.")});
-  tick();qrTimer=setInterval(tick,1000);
-}
-
-async function payInvoice(id){
-  const select=$("paymentMethod");
-  const method=select?.value==="QRIS"?"QRIS (simulasi)":(select?.value||"Transfer Internal");
-  const tx=findTx(id);if(!tx)return;
-  const btn=$("confirmPayment");
-  if(select?.value==="QRIS"){
-    btn.disabled=true;btn.textContent="Memverifikasi pembayaran...";
-    await new Promise(r=>setTimeout(r,1500));
-  }
-  const upd={status:"Lunas",method,paidAt:new Date().toISOString()};
-  updateDoc(doc(db,"transaksi",id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
-  const updated={...tx,...upd};
-  localTx.set(id,updated);
-  renderInvoice(updated);showToast("Pembayaran berhasil (simulasi). Invoice berstatus Lunas.");
-}
-
-/* ================= DASHBOARD (ADMIN) ================= */
-function filteredTransactions(){
-  const data=loadTransactions(),filter=$("reportFilter").value,now=new Date();
-  return data.filter(t=>{const d=new Date(t.createdAt);if(filter==="week"){const start=new Date(now);start.setDate(now.getDate()-6);start.setHours(0,0,0,0);return d>=start&&d<=now}if(filter==="month")return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();return true});
-}
-function renderDashboard(){
-  const data=filteredTransactions();const paid=data.filter(t=>t.status==="Lunas").reduce((s,t)=>s+t.price,0);const unpaid=data.filter(t=>t.status!=="Lunas").reduce((s,t)=>s+t.price,0);
-  $("totalTransactions").textContent=data.length;$("totalRevenue").textContent=money(paid);$("unpaidTotal").textContent=money(unpaid);
-  const f=$("reportFilter").value;$("reportRange").textContent=f==="week"?"7 hari terakhir":f==="month"?"Bulan ini":"Semua periode";
-  $("transactionRows").innerHTML=data.length?data.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.packageName)}</td><td>${new Date(t.date+"T00:00:00").toLocaleDateString("id-ID")}</td><td>${money(t.price)}</td><td><span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span></td><td><button class="table-action" data-invoice="${escapeHtml(t.id)}">Invoice</button></td></tr>`).join(""):'<tr><td colspan="7" class="empty">Tidak ada transaksi pada periode ini.</td></tr>';
-  document.querySelectorAll("[data-invoice]").forEach(btn=>btn.addEventListener("click",()=>openInvoice(btn.dataset.invoice)));
-}
-$("reportFilter").addEventListener("change",renderDashboard);
-$("exportCsv").addEventListener("click",()=>{
-  if(!isAdmin)return;
-  const rows=filteredTransactions();if(!rows.length){showToast("Belum ada data untuk diunduh.");return}
-  const header=["Invoice","Nama","Kontak","Paket","Tanggal Layanan","Total","Status","Metode Pembayaran","Tanggal Transaksi"];
-  const csv=[header,...rows.map(t=>[t.id,t.name,t.contact,t.packageName,t.date,t.price,t.status,t.method,t.createdAt])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
-  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="laporan-lensakita.csv";a.click();URL.revokeObjectURL(url);showToast("Laporan CSV berhasil diunduh.");
-});
-$("clearData").addEventListener("click",async()=>{
-  if(!isAdmin)return;
-  if(confirm("Yakin ingin menghapus SEMUA transaksi? Data terhapus permanen.")){
-    for(const t of [...cache]) await deleteDoc(doc(db,"transaksi",t.id));
-    closeInvoice();showToast("Data transaksi telah dihapus.");
-  }
-});
-
-renderPackages();renderDashboard();
