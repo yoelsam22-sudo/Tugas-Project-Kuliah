@@ -496,23 +496,23 @@ footer a:hover {
 }
 
 .package-card:hover {
-    border-color: var(--green);
+    border-color: #d9d6c8;
     box-shadow: 0 18px 40px #344a3520;
     background: radial-gradient(circle 190px at var(--mx, 50%) var(--my, 50%), rgba(215, 154, 100, .22), transparent 70%), var(--paper);
 }
 
 .package-card:focus-visible {
-    box-shadow: 0 0 0 3px rgba(82, 107, 80, .4);
+    box-shadow: 0 0 0 3px rgba(215, 154, 100, .45);
 }
 
 .package-card.featured {
-    border-color: var(--green);
+    border-color: var(--line);
     box-shadow: 0 10px 30px #344a3510;
 }
 
 .package-card.selected {
-    border-color: var(--green);
-    box-shadow: 0 0 0 2px var(--green), 0 14px 34px #344a3522;
+    border-color: var(--line);
+    box-shadow: 0 0 0 2px rgba(215, 154, 100, .6), 0 14px 34px #344a3522;
 }
 
 .package-card.selected::after {
