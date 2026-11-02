@@ -25,7 +25,6 @@ const localTx = new Map(); // pesanan yang baru dibuat di browser ini
 const qrExpiry = new Map();
 let isAdmin = false;
 let currentUser = null;
-let authMode = "login";
 let unsubscribe = null;
 let unsubMine = null;
 let qrTimer = null;
@@ -222,47 +221,52 @@ function setupGlobalEffects(){
 }
 
 /* ================= AUTH (ADMIN & USER) ================= */
-function setAuthMode(mode){
-  authMode=mode;
-  const reg=mode==="register";
-  $("authTitle").textContent=reg?"Daftar Akun":"Masuk";
-  $("loginSubmit").textContent=reg?"Daftar":"Masuk";
-  $("authSwitchText").textContent=reg?"Sudah punya akun?":"Belum punya akun?";
-  $("authSwitch").textContent=reg?"Masuk":"Daftar";
-  $("loginPassword").autocomplete=reg?"new-password":"current-password";
-}
-function openLogin(mode="login"){setAuthMode(mode);$("loginModal").classList.add("show");$("loginModal").setAttribute("aria-hidden","false");$("loginEmail").focus()}
+const authErrors={
+  "auth/email-already-in-use":"Email sudah terdaftar. Klik Masuk.",
+  "auth/weak-password":"Password minimal 6 karakter.",
+  "auth/invalid-email":"Format email tidak valid.",
+  "auth/user-not-found":"Akun belum terdaftar. Klik Daftar Akun Baru.",
+  "auth/invalid-credential":"Email atau password salah, atau akun belum terdaftar.",
+  "auth/operation-not-allowed":"Email/Password belum diaktifkan di Firebase.",
+  "auth/admin-restricted-operation":"Pendaftaran akun baru dimatikan di Firebase.",
+  "auth/unauthorized-domain":"Domain website ini belum diizinkan di Firebase.",
+  "auth/network-request-failed":"Koneksi gagal. Buka lewat Live Server/localhost."
+};
+function authMessage(err,fallback){return (authErrors[err.code]||fallback)+" ["+err.code+"]"}
+function openLogin(){$("loginModal").classList.add("show");$("loginModal").setAttribute("aria-hidden","false");$("loginEmail").focus()}
 function closeLogin(){$("loginModal").classList.remove("show");$("loginModal").setAttribute("aria-hidden","true");$("loginForm").reset()}
-$("loginBtn").addEventListener("click",()=>openLogin("login"));
+$("loginBtn").addEventListener("click",openLogin);
 $("closeLogin").addEventListener("click",closeLogin);
-$("authSwitch").addEventListener("click",()=>setAuthMode(authMode==="login"?"register":"login"));
 $("loginModal").addEventListener("click",e=>{if(e.target===$("loginModal"))closeLogin()});
 $("logoutBtn").addEventListener("click",async()=>{await signOut(auth);showToast("Anda telah logout.")});
 
+// MASUK (akun yang sudah ada)
 $("loginForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const btn=$("loginSubmit");btn.disabled=true;btn.textContent="Memproses...";
   const email=$("loginEmail").value.trim(),pass=$("loginPassword").value;
   try{
-    if(authMode==="register"){
-      await createUserWithEmailAndPassword(auth,email,pass);
-      showToast("Akun berhasil dibuat. Selamat datang!");
-    }else{
-      await signInWithEmailAndPassword(auth,email,pass);
-      showToast("Login berhasil. Selamat datang!");
-    }
+    await signInWithEmailAndPassword(auth,email,pass);
     const goAdmin=ADMIN_EMAILS.includes(email.toLowerCase());
-    closeLogin();
+    closeLogin();showToast("Login berhasil. Selamat datang!");
     setTimeout(()=>{location.hash=goAdmin?"#admin":"#pesan"},150);
   }catch(err){
-    console.error(err);
-    const msg={
-      "auth/email-already-in-use":"Email sudah terdaftar. Silakan masuk.",
-      "auth/weak-password":"Password minimal 6 karakter.",
-      "auth/invalid-email":"Format email tidak valid."
-    }[err.code]||(authMode==="register"?"Pendaftaran gagal.":"Login gagal. Cek email dan password.");
-    showToast(msg+" ["+err.code+"]");
-  }finally{btn.disabled=false;btn.textContent=authMode==="register"?"Daftar":"Masuk"}
+    console.error(err);showToast(authMessage(err,"Login gagal."));
+  }finally{btn.disabled=false;btn.textContent="Masuk"}
+});
+
+// DAFTAR (akun baru)
+$("registerBtn").addEventListener("click",async()=>{
+  const email=$("loginEmail").value.trim(),pass=$("loginPassword").value;
+  if(!email||pass.length<6){showToast("Isi email dan password (minimal 6 karakter).");return}
+  const btn=$("registerBtn");btn.disabled=true;btn.textContent="Mendaftar...";
+  try{
+    await createUserWithEmailAndPassword(auth,email,pass);
+    closeLogin();showToast("Akun berhasil dibuat. Selamat datang!");
+    setTimeout(()=>{location.hash="#pesan"},150);
+  }catch(err){
+    console.error(err);showToast(authMessage(err,"Pendaftaran gagal."));
+  }finally{btn.disabled=false;btn.textContent="Daftar Akun Baru"}
 });
 
 onAuthStateChanged(auth,user=>{
