@@ -62,6 +62,7 @@ $("loginForm").addEventListener("submit",async e=>{
 
 onAuthStateChanged(auth,user=>{
   isAdmin=!!user;
+  document.body.classList.toggle("is-admin",isAdmin);
   $("admin").hidden=!isAdmin;
   $("navAdmin").hidden=!isAdmin;
   $("loginBtn").hidden=isAdmin;
@@ -78,7 +79,7 @@ onAuthStateChanged(auth,user=>{
     },err=>{console.error(err);showToast("Gagal membaca database. Cek Rules Firestore.")});
   }else{
     cache=[];renderDashboard();
-    if(location.hash==="#admin")location.hash="#beranda";
+    if(location.hash==="#admin"||location.hash==="#pesan")location.hash="#beranda";
   }
 });
 
@@ -92,6 +93,7 @@ $("packageSelect").addEventListener("change",()=>{$("bookingPrice").textContent=
 $("serviceDate").min=todayISO();
 $("bookingForm").addEventListener("submit",e=>{
   e.preventDefault();
+  if(isAdmin){showToast("Admin tidak dapat membuat pesanan.");return}
   const pkg=selectedPackage();if(!pkg){showToast("Pilih paket terlebih dahulu.");return}
   const tx={id:invoiceNumber(),name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date:$("serviceDate").value,notes:$("notes").value.trim(),createdAt:new Date().toISOString(),status:"Belum dibayar",method:"-",paidAt:null};
   localTx.set(tx.id,tx);
