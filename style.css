@@ -1022,6 +1022,13 @@ footer > a:last-child {
     transform: translate(-50%, 0);
 }
 
+/* MODE ADMIN: tidak bisa memesan */
+
+body.is-admin #pesan,
+body.is-admin a[href="#pesan"] {
+    display: none !important;
+}
+
 /* RESPONSIVE TABLET */
 
 @media (max-width: 900px) {
