@@ -261,7 +261,7 @@ $("loginForm").addEventListener("submit",async e=>{
       "auth/weak-password":"Password minimal 6 karakter.",
       "auth/invalid-email":"Format email tidak valid."
     }[err.code]||(authMode==="register"?"Pendaftaran gagal.":"Login gagal. Cek email dan password.");
-    showToast(msg);
+    showToast(msg+" ["+err.code+"]");
   }finally{btn.disabled=false;btn.textContent=authMode==="register"?"Daftar":"Masuk"}
 });
 
