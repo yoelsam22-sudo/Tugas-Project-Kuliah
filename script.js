@@ -94,11 +94,22 @@ function confetti(x,y,count=40){
   }
 }
 
-// kartu paket dipilih / diklik
+// kartu paket diklik: pilih, atau batalkan kalau klik paket yang sama lagi
 function onPackageClick(card,x,y){
-  burstBubbles(x,y,20);
-  if(isAdmin)return; // admin tidak memesan, cukup efek saja
+  if(isAdmin){burstBubbles(x,y,20);return} // admin tidak memesan, cukup efek saja
   const p=packages.find(pk=>pk.id===card.dataset.id);if(!p)return;
+
+  if($("packageSelect").value===p.id){
+    // klik paket yang sama lagi = batal pilih
+    $("packageSelect").value="";
+    $("bookingPrice").textContent=money(0);
+    syncSelectedCard();
+    burstBubbles(x,y,10,true);
+    showToast("Pilihan paket dibatalkan.");
+    return;
+  }
+
+  burstBubbles(x,y,20);
   $("packageSelect").value=p.id;
   $("bookingPrice").textContent=money(p.price);
   syncSelectedCard();
