@@ -10,9 +10,11 @@
   <header class="topbar">
     <a class="brand" href="#beranda"><span class="brand-icon">LK</span><span>LensaKita <small>PHOTO & FILM</small></span></a>
     <nav>
-      <a href="#layanan">Layanan</a><a href="#pesan">Pesan</a><a href="#artikel">Artikel</a>
+      <a href="#layanan">Layanan</a><a href="#terbaru">Pesanan Terbaru</a><a href="#pesan">Pesan</a><a href="#artikel">Artikel</a>
+      <a href="#pesananku" id="navMine" hidden>Pesanan Saya</a>
       <a href="#admin" id="navAdmin" hidden>Dashboard</a>
-      <button class="nav-login" id="loginBtn" type="button">Login Admin</button>
+      <span class="nav-user" id="userEmail" hidden></span>
+      <button class="nav-login" id="loginBtn" type="button">Masuk / Daftar</button>
       <button class="nav-login" id="logoutBtn" type="button" hidden>Logout</button>
     </nav>
   </header>
@@ -38,8 +40,13 @@
       <div class="package-grid" id="packageGrid"></div>
     </section>
 
+    <section class="section" id="terbaru">
+      <div class="section-heading"><div><p class="eyebrow">KOMUNITAS LENSAKITA</p><h2>Pesanan terbaru</h2></div><p>Siapa saja yang baru memesan. Nama disamarkan demi privasi pelanggan.</p></div>
+      <div class="feed-list" id="publicFeed"></div>
+    </section>
+
     <section class="booking-section" id="pesan">
-      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Isi data dan pilih metode pembayaran (QRIS, transfer, atau tunai) untuk simulasi transaksi.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Masuk atau daftar akun, isi data, lalu pilih metode pembayaran (QRIS, transfer, atau tunai) untuk simulasi transaksi.</p></div>
       <div class="booking-layout">
         <form id="bookingForm" class="panel form-panel">
           <label>Nama pelanggan<input id="customerName" required placeholder="Nama lengkap"></label>
@@ -52,11 +59,19 @@
           <p class="tiny">Demo tugas: transaksi disimpan di database, tidak memotong saldo atau mengirim uang sungguhan.</p>
         </form>
         <div class="panel how-panel">
-          <span class="step-icon">01</span><h3>Pilih paket</h3><p>Tentukan layanan sesuai kebutuhan dan tanggal acara.</p>
+          <span class="step-icon">01</span><h3>Masuk & pilih paket</h3><p>Daftar akun, lalu tentukan layanan sesuai kebutuhan dan tanggal acara.</p>
           <span class="step-icon">02</span><h3>Pilih pembayaran</h3><p>Setelah pesanan dibuat, pilih simulasi pembayaran QRIS, transfer internal, atau tunai.</p>
-          <span class="step-icon">03</span><h3>Cetak invoice</h3><p>Invoice dapat dicetak atau disimpan sebagai PDF dari menu cetak browser.</p>
+          <span class="step-icon">03</span><h3>Cetak invoice</h3><p>Invoice beserta riwayat pembayaran dapat dicetak atau disimpan sebagai PDF dari menu cetak browser.</p>
         </div>
       </div>
+    </section>
+
+    <section class="section" id="pesananku" hidden>
+      <div class="section-heading"><div><p class="eyebrow">AKUN SAYA</p><h2>Pesanan saya</h2></div><p>Semua invoice milikmu ada di sini. Bisa dibuka, dibayar, dan dicetak kapan saja.</p></div>
+      <div class="panel table-panel"><div class="table-wrap">
+        <table><thead><tr><th>Invoice</th><th>Paket</th><th>Tanggal</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="myRows"><tr><td colspan="6" class="empty">Belum ada pesanan.</td></tr></tbody></table>
+      </div></div>
     </section>
 
     <section class="section article-section" id="artikel">
@@ -88,10 +103,10 @@
     <section class="manual-section section" id="manual">
       <p class="eyebrow">PANDUAN PENGGUNA</p><h2>Manual book singkat</h2>
       <div class="manual-grid">
-        <div><strong>01. Pelanggan</strong><p>Buka bagian Pesan, isi nama dan kontak, pilih paket serta tanggal, lalu klik “Buat Pesanan & Invoice”.</p></div>
-        <div><strong>02. Pembayaran</strong><p>Di invoice yang muncul, pilih metode pembayaran. Untuk QRIS, tampil QR simulasi, klik “Simulasikan Scan & Bayar”. Status invoice otomatis menjadi Lunas.</p></div>
-        <div><strong>03. Cetak invoice</strong><p>Klik “Cetak Invoice”. Pada dialog printer, pilih printer atau “Save as PDF”.</p></div>
-        <div><strong>04. Laporan keuangan (Admin)</strong><p>Klik “Login Admin”, masukkan email dan password. Menu Dashboard akan muncul: pilih filter semua transaksi, 7 hari terakhir, atau bulan ini, lalu unduh CSV untuk dibuka di Excel.</p></div>
+        <div><strong>01. Pelanggan</strong><p>Klik “Masuk / Daftar” dan buat akun. Buka bagian Pesan, isi nama dan kontak, pilih paket serta tanggal, lalu klik “Buat Pesanan & Invoice”. Semua invoice tersimpan di menu “Pesanan Saya”.</p></div>
+        <div><strong>02. Pembayaran</strong><p>Di invoice yang muncul, pilih metode pembayaran. Untuk QRIS, tampil QR simulasi, klik “Simulasikan Scan & Bayar”. Status invoice otomatis menjadi Lunas dan tercatat di riwayat pembayaran.</p></div>
+        <div><strong>03. Cetak invoice</strong><p>Klik “Cetak Invoice”. Invoice sudah memuat riwayat pembayaran. Pada dialog printer, pilih printer atau “Save as PDF”.</p></div>
+        <div><strong>04. Laporan keuangan (Admin)</strong><p>Klik “Masuk / Daftar”, masuk dengan email admin. Menu Dashboard akan muncul: pilih filter semua transaksi, 7 hari terakhir, atau bulan ini, lalu unduh CSV untuk dibuka di Excel.</p></div>
       </div>
     </section>
   </main>
@@ -100,15 +115,15 @@
 
   <div class="modal-backdrop" id="loginModal" aria-hidden="true">
     <form class="login-sheet" id="loginForm">
-      <p class="eyebrow">AREA ADMIN</p>
-      <h2>Login Admin</h2>
-      <label>Email<input id="loginEmail" type="email" required autocomplete="username" placeholder="admin@lensakita.com"></label>
-      <label>Password<input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Password"></label>
+      <p class="eyebrow">AKUN LENSAKITA</p>
+      <h2 id="authTitle">Masuk</h2>
+      <label>Email<input id="loginEmail" type="email" required autocomplete="username" placeholder="nama@email.com"></label>
+      <label>Password<input id="loginPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="Minimal 6 karakter"></label>
       <div class="login-actions">
         <button class="btn ghost" type="button" id="closeLogin">Batal</button>
         <button class="btn primary" type="submit" id="loginSubmit">Masuk</button>
       </div>
-      <p class="tiny">Hanya admin yang dapat melihat dashboard dan laporan keuangan.</p>
+      <p class="tiny"><span id="authSwitchText">Belum punya akun?</span> <button type="button" class="link-btn" id="authSwitch">Daftar</button></p>
     </form>
   </div>
 
