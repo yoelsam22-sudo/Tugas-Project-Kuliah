@@ -10,7 +10,10 @@
   <header class="topbar">
     <a class="brand" href="#beranda"><span class="brand-icon">LK</span><span>LensaKita <small>PHOTO & FILM</small></span></a>
     <nav>
-      <a href="#layanan">Layanan</a><a href="#pesan">Pesan</a><a href="#artikel">Artikel</a><a href="#admin">Dashboard</a>
+      <a href="#layanan">Layanan</a><a href="#pesan">Pesan</a><a href="#artikel">Artikel</a>
+      <a href="#admin" id="navAdmin" hidden>Dashboard</a>
+      <button class="nav-login" id="loginBtn" type="button">Login Admin</button>
+      <button class="nav-login" id="logoutBtn" type="button" hidden>Logout</button>
     </nav>
   </header>
 
@@ -36,7 +39,7 @@
     </section>
 
     <section class="booking-section" id="pesan">
-      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Isi data dan pilih metode pembayaran internal untuk simulasi transaksi.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Isi data dan pilih metode pembayaran (QRIS, transfer, atau tunai) untuk simulasi transaksi.</p></div>
       <div class="booking-layout">
         <form id="bookingForm" class="panel form-panel">
           <label>Nama pelanggan<input id="customerName" required placeholder="Nama lengkap"></label>
@@ -46,11 +49,11 @@
           <label>Catatan kebutuhan<textarea id="notes" rows="3" placeholder="Lokasi, tema, atau kebutuhan tambahan..."></textarea></label>
           <div class="price-line"><span>Total pesanan</span><strong id="bookingPrice">Rp0</strong></div>
           <button class="btn primary full" type="submit">Buat Pesanan & Invoice</button>
-          <p class="tiny">Demo tugas: transaksi disimpan di browser ini, tidak memotong saldo atau mengirim uang sungguhan.</p>
+          <p class="tiny">Demo tugas: transaksi disimpan di database, tidak memotong saldo atau mengirim uang sungguhan.</p>
         </form>
         <div class="panel how-panel">
           <span class="step-icon">01</span><h3>Pilih paket</h3><p>Tentukan layanan sesuai kebutuhan dan tanggal acara.</p>
-          <span class="step-icon">02</span><h3>Pilih pembayaran</h3><p>Setelah pesanan dibuat, pilih simulasi pembayaran tunai atau transfer internal.</p>
+          <span class="step-icon">02</span><h3>Pilih pembayaran</h3><p>Setelah pesanan dibuat, pilih simulasi pembayaran QRIS, transfer internal, atau tunai.</p>
           <span class="step-icon">03</span><h3>Cetak invoice</h3><p>Invoice dapat dicetak atau disimpan sebagai PDF dari menu cetak browser.</p>
         </div>
       </div>
@@ -65,8 +68,8 @@
       </div>
     </section>
 
-    <section class="dashboard-section" id="admin">
-      <div class="section-heading"><div><p class="eyebrow">AREA ADMIN</p><h2>Dashboard transaksi</h2></div><p>Data transaksi berasal dari pemesanan di browser ini.</p></div>
+    <section class="dashboard-section" id="admin" hidden>
+      <div class="section-heading"><div><p class="eyebrow">AREA ADMIN</p><h2>Dashboard transaksi</h2></div><p>Hanya admin yang dapat melihat data transaksi dan laporan keuangan.</p></div>
       <div class="dashboard-toolbar panel">
         <label>Filter laporan<select id="reportFilter"><option value="all">Semua transaksi</option><option value="week">7 hari terakhir</option><option value="month">Bulan ini</option></select></label>
         <div class="toolbar-buttons"><button class="btn secondary" id="exportCsv">Unduh CSV</button><button class="btn ghost" id="clearData">Hapus data demo</button></div>
@@ -86,14 +89,28 @@
       <p class="eyebrow">PANDUAN PENGGUNA</p><h2>Manual book singkat</h2>
       <div class="manual-grid">
         <div><strong>01. Pelanggan</strong><p>Buka bagian Pesan, isi nama dan kontak, pilih paket serta tanggal, lalu klik “Buat Pesanan & Invoice”.</p></div>
-        <div><strong>02. Pembayaran</strong><p>Di invoice yang muncul, pilih “Bayar sekarang”. Pilih Tunai atau Transfer Internal, kemudian konfirmasi pembayaran simulasi.</p></div>
+        <div><strong>02. Pembayaran</strong><p>Di invoice yang muncul, pilih metode pembayaran. Untuk QRIS, tampil QR simulasi, klik “Simulasikan Scan & Bayar”. Status invoice otomatis menjadi Lunas.</p></div>
         <div><strong>03. Cetak invoice</strong><p>Klik “Cetak Invoice”. Pada dialog printer, pilih printer atau “Save as PDF”.</p></div>
-        <div><strong>04. Laporan keuangan</strong><p>Buka Dashboard, pilih semua transaksi, 7 hari terakhir, atau bulan ini. Unduh CSV untuk membuka laporan di Excel.</p></div>
+        <div><strong>04. Laporan keuangan (Admin)</strong><p>Klik “Login Admin”, masukkan email dan password. Menu Dashboard akan muncul: pilih filter semua transaksi, 7 hari terakhir, atau bulan ini, lalu unduh CSV untuk dibuka di Excel.</p></div>
       </div>
     </section>
   </main>
 
   <footer><a class="brand" href="#beranda"><span class="brand-icon">LK</span><span>LensaKita <small>PHOTO & FILM</small></span></a><p>© 2026 LensaKita Studio — Project website fotografi & videografi.</p><a href="#manual">Manual Book</a></footer>
+
+  <div class="modal-backdrop" id="loginModal" aria-hidden="true">
+    <form class="login-sheet" id="loginForm">
+      <p class="eyebrow">AREA ADMIN</p>
+      <h2>Login Admin</h2>
+      <label>Email<input id="loginEmail" type="email" required autocomplete="username" placeholder="admin@lensakita.com"></label>
+      <label>Password<input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Password"></label>
+      <div class="login-actions">
+        <button class="btn ghost" type="button" id="closeLogin">Batal</button>
+        <button class="btn primary" type="submit" id="loginSubmit">Masuk</button>
+      </div>
+      <p class="tiny">Hanya admin yang dapat melihat dashboard dan laporan keuangan.</p>
+    </form>
+  </div>
 
   <div class="modal-backdrop" id="invoiceModal" aria-hidden="true">
     <div class="invoice-sheet">
