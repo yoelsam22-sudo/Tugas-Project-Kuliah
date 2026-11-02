@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA_JfZNfuGsBJ6TOpH7mDZP9u9Tsrgnyt8",
@@ -15,12 +15,19 @@ const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 const auth = getAuth(fbApp);
 const txCol = collection(db, "transaksi");
+const pubCol = collection(db, "pesanan_publik");
+const ADMIN_EMAILS = ["admin@lensakita.com"]; // samakan dengan email admin di Firestore Rules
 
-let cache = [];            // data dari Firestore (hanya terisi kalau admin login)
-const localTx = new Map(); // pesanan yang dibuat pengunjung di browser ini
+let cache = [];            // semua transaksi (khusus admin)
+let myCache = [];          // transaksi milik user yang login
+let publicCache = [];      // feed pesanan publik (nama disamarkan)
+const localTx = new Map(); // pesanan yang baru dibuat di browser ini
 const qrExpiry = new Map();
 let isAdmin = false;
+let currentUser = null;
+let authMode = "login";
 let unsubscribe = null;
+let unsubMine = null;
 let qrTimer = null;
 let currentInvoiceId = null;
 
@@ -35,7 +42,7 @@ const $ = id => document.getElementById(id);
 const money = value => new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(value);
 const todayISO = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 function loadTransactions(){return cache}
-function findTx(id){return cache.find(t=>t.id===id)||localTx.get(id)}
+function findTx(id){return cache.find(t=>t.id===id)||myCache.find(t=>t.id===id)||localTx.get(id)}
 function invoiceNumber(){return "LK-"+new Date().getFullYear()+String(Date.now()).slice(-6)}
 function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showToast(message){$("toast").textContent=message;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
@@ -100,7 +107,6 @@ function onPackageClick(card,x,y){
   const p=packages.find(pk=>pk.id===card.dataset.id);if(!p)return;
 
   if($("packageSelect").value===p.id){
-    // klik paket yang sama lagi = batal pilih
     $("packageSelect").value="";
     $("bookingPrice").textContent=money(0);
     syncSelectedCard();
@@ -215,48 +221,105 @@ function setupGlobalEffects(){
   });
 }
 
-/* ================= AUTH ADMIN ================= */
-function openLogin(){$("loginModal").classList.add("show");$("loginModal").setAttribute("aria-hidden","false");$("loginEmail").focus()}
+/* ================= AUTH (ADMIN & USER) ================= */
+function setAuthMode(mode){
+  authMode=mode;
+  const reg=mode==="register";
+  $("authTitle").textContent=reg?"Daftar Akun":"Masuk";
+  $("loginSubmit").textContent=reg?"Daftar":"Masuk";
+  $("authSwitchText").textContent=reg?"Sudah punya akun?":"Belum punya akun?";
+  $("authSwitch").textContent=reg?"Masuk":"Daftar";
+  $("loginPassword").autocomplete=reg?"new-password":"current-password";
+}
+function openLogin(mode="login"){setAuthMode(mode);$("loginModal").classList.add("show");$("loginModal").setAttribute("aria-hidden","false");$("loginEmail").focus()}
 function closeLogin(){$("loginModal").classList.remove("show");$("loginModal").setAttribute("aria-hidden","true");$("loginForm").reset()}
-$("loginBtn").addEventListener("click",openLogin);
+$("loginBtn").addEventListener("click",()=>openLogin("login"));
 $("closeLogin").addEventListener("click",closeLogin);
+$("authSwitch").addEventListener("click",()=>setAuthMode(authMode==="login"?"register":"login"));
 $("loginModal").addEventListener("click",e=>{if(e.target===$("loginModal"))closeLogin()});
 $("logoutBtn").addEventListener("click",async()=>{await signOut(auth);showToast("Anda telah logout.")});
 
 $("loginForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const btn=$("loginSubmit");btn.disabled=true;btn.textContent="Memproses...";
+  const email=$("loginEmail").value.trim(),pass=$("loginPassword").value;
   try{
-    await signInWithEmailAndPassword(auth,$("loginEmail").value.trim(),$("loginPassword").value);
-    closeLogin();showToast("Login berhasil. Selamat datang, Admin!");
-    setTimeout(()=>{location.hash="#admin"},150);
+    if(authMode==="register"){
+      await createUserWithEmailAndPassword(auth,email,pass);
+      showToast("Akun berhasil dibuat. Selamat datang!");
+    }else{
+      await signInWithEmailAndPassword(auth,email,pass);
+      showToast("Login berhasil. Selamat datang!");
+    }
+    const goAdmin=ADMIN_EMAILS.includes(email.toLowerCase());
+    closeLogin();
+    setTimeout(()=>{location.hash=goAdmin?"#admin":"#pesan"},150);
   }catch(err){
-    console.error(err);showToast("Login gagal. Cek email dan password.");
-  }finally{btn.disabled=false;btn.textContent="Masuk"}
+    console.error(err);
+    const msg={
+      "auth/email-already-in-use":"Email sudah terdaftar. Silakan masuk.",
+      "auth/weak-password":"Password minimal 6 karakter.",
+      "auth/invalid-email":"Format email tidak valid."
+    }[err.code]||(authMode==="register"?"Pendaftaran gagal.":"Login gagal. Cek email dan password.");
+    showToast(msg);
+  }finally{btn.disabled=false;btn.textContent=authMode==="register"?"Daftar":"Masuk"}
 });
 
 onAuthStateChanged(auth,user=>{
-  isAdmin=!!user;
+  currentUser=user;
+  isAdmin=!!user&&ADMIN_EMAILS.includes((user.email||"").toLowerCase());
+  const isUser=!!user&&!isAdmin;
   document.body.classList.toggle("is-admin",isAdmin);
-  $("admin").hidden=!isAdmin;
-  $("navAdmin").hidden=!isAdmin;
-  $("loginBtn").hidden=isAdmin;
-  $("logoutBtn").hidden=!isAdmin;
+  $("admin").hidden=!isAdmin;      $("navAdmin").hidden=!isAdmin;
+  $("pesananku").hidden=!isUser;   $("navMine").hidden=!isUser;
+  $("loginBtn").hidden=!!user;     $("logoutBtn").hidden=!user;
+  $("userEmail").hidden=!user;     $("userEmail").textContent=user?user.email:"";
   if(unsubscribe){unsubscribe();unsubscribe=null}
+  if(unsubMine){unsubMine();unsubMine=null}
+  cache=[];myCache=[];
+
+  const refreshOpenInvoice=()=>{
+    if($("invoiceModal").classList.contains("show")&&currentInvoiceId){
+      const tx=findTx(currentInvoiceId);if(tx)renderInvoice(tx);
+    }
+  };
   if(isAdmin){
-    // realtime hanya aktif untuk admin
+    // realtime semua transaksi, hanya untuk admin
     unsubscribe=onSnapshot(txCol,snap=>{
       cache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-      renderDashboard();
-      if($("invoiceModal").classList.contains("show")&&currentInvoiceId){
-        const tx=findTx(currentInvoiceId);if(tx)renderInvoice(tx);
-      }
+      renderDashboard();refreshOpenInvoice();
     },err=>{console.error(err);showToast("Gagal membaca database. Cek Rules Firestore.")});
-  }else{
-    cache=[];renderDashboard();
-    if(location.hash==="#admin"||location.hash==="#pesan")location.hash="#beranda";
+  }else if(isUser){
+    // realtime hanya pesanan milik user ini
+    if(!$("customerContact").value)$("customerContact").value=user.email;
+    unsubMine=onSnapshot(query(txCol,where("uid","==",user.uid)),snap=>{
+      myCache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+      renderMine();refreshOpenInvoice();
+    },err=>{console.error(err);showToast("Gagal membaca pesanan. Cek Rules Firestore.")});
   }
+  renderDashboard();renderMine();
+  if(!isAdmin&&location.hash==="#admin")location.hash="#beranda";
+  if(!isUser&&location.hash==="#pesananku")location.hash="#beranda";
 });
+
+/* ================= FEED PUBLIK & PESANAN SAYA ================= */
+function maskName(name){
+  const p=String(name||"").trim().split(/\s+/).filter(Boolean);
+  if(!p.length)return "Pelanggan";
+  if(p.length===1)return p[0].slice(0,3)+"***";
+  return p[0]+" "+p[p.length-1][0].toUpperCase()+".";
+}
+function renderPublicFeed(){
+  $("publicFeed").innerHTML=publicCache.length?publicCache.slice(0,9).map(p=>`<div class="feed-item"><div class="feed-avatar">${escapeHtml((p.maskedName||"?")[0].toUpperCase())}</div><div class="feed-info"><strong>${escapeHtml(p.maskedName)}</strong><span>${escapeHtml(p.packageName)} · ${new Date(p.date+"T00:00:00").toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span></div><span class="status ${p.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(p.status)}</span></div>`).join(""):'<p class="empty">Belum ada pesanan. Jadilah yang pertama!</p>';
+}
+function renderMine(){
+  $("myRows").innerHTML=myCache.length?myCache.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.packageName)}</td><td>${new Date(t.date+"T00:00:00").toLocaleDateString("id-ID")}</td><td>${money(t.price)}</td><td><span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span></td><td><button class="table-action" data-my="${escapeHtml(t.id)}">Invoice</button></td></tr>`).join(""):'<tr><td colspan="6" class="empty">Belum ada pesanan.</td></tr>';
+  document.querySelectorAll("[data-my]").forEach(b=>b.addEventListener("click",()=>openInvoice(b.dataset.my)));
+}
+function historyHtml(tx){
+  const h=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}].concat(tx.status==="Lunas"?[{time:tx.paidAt,action:"Pembayaran diterima",method:tx.method,ref:"-",status:"Lunas"}]:[]);
+  return `<h4 class="history-title">Riwayat pembayaran</h4><table class="history-table"><thead><tr><th>Waktu</th><th>Aktivitas</th><th>Metode</th><th>Ref</th><th>Status</th></tr></thead><tbody>${h.map(x=>`<tr><td>${new Date(x.time).toLocaleString("id-ID")}</td><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.method||"-")}</td><td>${escapeHtml(x.ref||"-")}</td><td>${escapeHtml(x.status)}</td></tr>`).join("")}</tbody></table>`;
+}
 
 /* ================= PAKET & PEMESANAN ================= */
 function renderPackages(){
@@ -269,11 +332,16 @@ $("serviceDate").min=todayISO();
 $("bookingForm").addEventListener("submit",e=>{
   e.preventDefault();
   if(isAdmin){showToast("Admin tidak dapat membuat pesanan.");return}
+  if(!currentUser){showToast("Masuk atau daftar dulu untuk memesan.");openLogin("login");return}
   const pkg=selectedPackage();if(!pkg){showToast("Pilih paket terlebih dahulu.");return}
-  const tx={id:invoiceNumber(),name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date:$("serviceDate").value,notes:$("notes").value.trim(),createdAt:new Date().toISOString(),status:"Belum dibayar",method:"-",paidAt:null};
+  const now=new Date().toISOString();
+  const tx={id:invoiceNumber(),uid:currentUser.uid,email:currentUser.email,name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date:$("serviceDate").value,notes:$("notes").value.trim(),createdAt:now,status:"Belum dibayar",method:"-",paidAt:null,
+    history:[{time:now,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}]};
   localTx.set(tx.id,tx);
   setDoc(doc(db,"transaksi",tx.id),tx).catch(err=>{console.error(err);showToast("Gagal menyimpan ke database.")});
-  openInvoice(tx.id,tx);$("bookingForm").reset();$("bookingPrice").textContent=money(0);syncSelectedCard();showToast("Pesanan berhasil dibuat. Invoice siap dilihat.");
+  // feed publik: hanya nama disamarkan, paket, tanggal, status (tanpa kontak & harga)
+  setDoc(doc(db,"pesanan_publik",tx.id),{id:tx.id,maskedName:maskName(tx.name),packageName:tx.packageName,date:tx.date,createdAt:now,status:tx.status}).catch(console.error);
+  openInvoice(tx.id,tx);$("bookingForm").reset();$("customerContact").value=currentUser.email;$("bookingPrice").textContent=money(0);syncSelectedCard();showToast("Pesanan berhasil dibuat. Invoice siap dilihat.");
 });
 
 /* ================= INVOICE ================= */
@@ -310,6 +378,7 @@ function renderInvoice(tx){
     <div class="invoice-meta"><div><h4>Ditagihkan kepada</h4><strong>${escapeHtml(tx.name)}</strong><p>${escapeHtml(tx.contact)}</p></div><div><h4>Detail pesanan</h4><strong>${escapeHtml(tx.packageName)}</strong><p>${escapeHtml(tx.notes||"Tidak ada catatan tambahan.")}</p></div></div>
     <table><thead><tr><th>Deskripsi</th><th>Jumlah</th><th>Harga</th></tr></thead><tbody><tr><td>${escapeHtml(tx.packageName)}</td><td>1 paket</td><td>${money(tx.price)}</td></tr></tbody></table>
     <div class="invoice-total"><span>Total pembayaran</span><strong>${money(tx.price)}</strong></div>
+    ${historyHtml(tx)}
     <p class="invoice-note">Status: <strong>${escapeHtml(tx.status)}</strong>${paid?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi dan bukan transaksi uang sungguhan.</p>
     ${paid?"":`<div class="payment-box">
       <h3>Pembayaran (simulasi)</h3>
@@ -357,8 +426,12 @@ async function payInvoice(id){
     btn.disabled=true;btn.textContent="Memverifikasi pembayaran...";
     await new Promise(r=>setTimeout(r,1500));
   }
-  const upd={status:"Lunas",method,paidAt:new Date().toISOString()};
+  const now=new Date().toISOString();
+  const ref="PAY-"+Math.random().toString(36).slice(2,8).toUpperCase();
+  const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
+  const upd={status:"Lunas",method,paidAt:now,payRef:ref,history:[...base,{time:now,action:"Pembayaran diterima",method,ref,status:"Lunas"}]};
   updateDoc(doc(db,"transaksi",id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
+  updateDoc(doc(db,"pesanan_publik",id),{status:"Lunas"}).catch(console.error);
   const updated={...tx,...upd};
   localTx.set(id,updated);
   renderInvoice(updated);showToast("Pembayaran berhasil (simulasi). Invoice berstatus Lunas.");
@@ -390,13 +463,24 @@ $("exportCsv").addEventListener("click",()=>{
 $("clearData").addEventListener("click",async()=>{
   if(!isAdmin)return;
   if(confirm("Yakin ingin menghapus SEMUA transaksi? Data terhapus permanen.")){
-    for(const t of [...cache]) await deleteDoc(doc(db,"transaksi",t.id));
+    for(const t of [...cache]){
+      await deleteDoc(doc(db,"transaksi",t.id));
+      await deleteDoc(doc(db,"pesanan_publik",t.id)).catch(()=>{});
+    }
     closeInvoice();showToast("Data transaksi telah dihapus.");
   }
 });
 
+/* ================= INISIALISASI ================= */
 renderPackages();
 renderDashboard();
+renderMine();
+// feed publik: realtime, bisa dilihat semua pengunjung
+onSnapshot(pubCol,snap=>{
+  publicCache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  renderPublicFeed();
+},err=>console.error(err));
+renderPublicFeed();
 setupPackageEffects();
 setupReveal();
 setupHeroEffects();
