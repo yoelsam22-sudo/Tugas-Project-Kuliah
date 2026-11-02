@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -16,7 +17,7 @@ const db = getFirestore(fbApp);
 const auth = getAuth(fbApp);
 const txCol = collection(db, "transaksi");
 const pubCol = collection(db, "pesanan_publik");
-const ADMIN_EMAILS = ["admin@lensakita.com"]; // samakan dengan email admin di Firestore Rules
+const ADMIN_EMAILS = ["adminlensa@gmail.com"]; // ganti sesuai email admin lu yang asli
 
 let cache = [];            // semua transaksi (khusus admin)
 let myCache = [];          // transaksi milik user yang login
