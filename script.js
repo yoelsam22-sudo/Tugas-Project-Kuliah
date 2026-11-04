@@ -83,7 +83,7 @@ function burstBubbles(x,y,count=16,small=false){
 // confetti jatuh (dipakai saat pembayaran Lunas)
 function confetti(x,y,count=40){
   if(reduceMotion)return;
-  const colors=["#526b50","#d79a64","#e3b68a","#8fae8b","#f2d9b8","#344a35"];
+  const colors=["#2d5a4a","#c9a14a","#e6cf94","#7fa896","#f3e7c3","#1c3a2f"];
   for(let i=0;i<count;i++){
     const el=document.createElement("span");
     el.className="confetti";
@@ -220,6 +220,46 @@ function setupGlobalEffects(){
   });
 }
 
+/* ================= ANIMASI SELAMAT DATANG (SETELAH LOGIN) ================= */
+let justLoggedIn=null; // "login" | "register", diisi saat user menekan tombol masuk/daftar
+function displayName(user){
+  const email=(user.email||"").toLowerCase();
+  if(ADMIN_EMAILS.includes(email))return "Admin";
+  const n=email.split("@")[0].replace(/[._-]+/g," ").trim()||"Pelanggan";
+  return n.charAt(0).toUpperCase()+n.slice(1);
+}
+function showWelcome(user,mode){
+  if(reduceMotion)return;
+  const admin=ADMIN_EMAILS.includes((user.email||"").toLowerCase());
+  const old=$("welcome");if(old)old.remove();
+  const el=document.createElement("div");
+  el.id="welcome";el.className="welcome";
+  el.innerHTML=`<div class="welcome-bg l"></div><div class="welcome-bg r"></div><div class="welcome-seam"></div><div class="welcome-glow"></div><div class="welcome-sparkles"></div>
+    <div class="welcome-inner">
+      <div class="welcome-logo"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg><span>LK</span></div>
+      <p class="welcome-eyebrow">${mode==="register"?"AKUN BERHASIL DIBUAT":"SELAMAT DATANG KEMBALI"}</p>
+      <h2 class="welcome-name">${escapeHtml(displayName(user))}</h2>
+      <div class="welcome-line"></div>
+      <p class="welcome-sub">${admin?"Dashboard laporan keuangan siap digunakan.":"Mari abadikan momen berharga Anda bersama kami."}</p>
+    </div>`;
+  const sp=el.querySelector(".welcome-sparkles");
+  for(let i=0;i<22;i++){
+    const d=document.createElement("i"),size=rnd(3,7);
+    d.style.cssText=`left:${rnd(4,96)}%;bottom:${rnd(-6,40)}%;width:${size}px;height:${size}px;animation-delay:${rnd(.5,2.4)}s;animation-duration:${rnd(2.4,4.2)}s`;
+    sp.appendChild(d);
+  }
+  document.body.appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add("play")));
+  let closed=false;
+  const close=()=>{
+    if(closed)return;closed=true;clearTimeout(timer);
+    el.classList.add("leave");
+    setTimeout(()=>el.remove(),1000);
+  };
+  const timer=setTimeout(close,3400);
+  el.addEventListener("click",close); // klik untuk melewati
+}
+
 /* ================= AUTH (ADMIN & USER) ================= */
 const authErrors={
   "auth/email-already-in-use":"Email sudah terdaftar. Klik Masuk.",
@@ -246,12 +286,13 @@ $("loginForm").addEventListener("submit",async e=>{
   const btn=$("loginSubmit");btn.disabled=true;btn.textContent="Memproses...";
   const email=$("loginEmail").value.trim(),pass=$("loginPassword").value;
   try{
+    justLoggedIn="login";
     await signInWithEmailAndPassword(auth,email,pass);
     const goAdmin=ADMIN_EMAILS.includes(email.toLowerCase());
     closeLogin();showToast("Login berhasil. Selamat datang!");
     setTimeout(()=>{location.hash=goAdmin?"#admin":"#pesan"},150);
   }catch(err){
-    console.error(err);showToast(authMessage(err,"Login gagal."));
+    justLoggedIn=null;console.error(err);showToast(authMessage(err,"Login gagal."));
   }finally{btn.disabled=false;btn.textContent="Masuk"}
 });
 
@@ -261,16 +302,18 @@ $("registerBtn").addEventListener("click",async()=>{
   if(!email||pass.length<6){showToast("Isi email dan password (minimal 6 karakter).");return}
   const btn=$("registerBtn");btn.disabled=true;btn.textContent="Mendaftar...";
   try{
+    justLoggedIn="register";
     await createUserWithEmailAndPassword(auth,email,pass);
     closeLogin();showToast("Akun berhasil dibuat. Selamat datang!");
     setTimeout(()=>{location.hash="#pesan"},150);
   }catch(err){
-    console.error(err);showToast(authMessage(err,"Pendaftaran gagal."));
+    justLoggedIn=null;console.error(err);showToast(authMessage(err,"Pendaftaran gagal."));
   }finally{btn.disabled=false;btn.textContent="Daftar Akun Baru"}
 });
 
 onAuthStateChanged(auth,user=>{
   currentUser=user;
+  if(user&&justLoggedIn){const mode=justLoggedIn;justLoggedIn=null;showWelcome(user,mode)}
   isAdmin=!!user&&ADMIN_EMAILS.includes((user.email||"").toLowerCase());
   const isUser=!!user&&!isAdmin;
   document.body.classList.toggle("is-admin",isAdmin);
@@ -489,6 +532,3 @@ setupPackageEffects();
 setupReveal();
 setupHeroEffects();
 setupGlobalEffects();
-
-
-
