@@ -272,49 +272,14 @@ body.is-admin #pesan, body.is-admin a[href="#pesan"] { display: none !important;
 .history-table { min-width: 0; }
 .history-table th, .history-table td { font-size: 10px; padding: 8px; }
 
-/* ANIMASI SELAMAT DATANG (SETELAH LOGIN) */
+/* TRANSISI SETELAH LOGIN (SEDERHANA) */
 
 .login-sheet { border-top: 3px solid var(--orange); }
-.welcome { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; cursor: pointer; opacity: 0; transition: opacity .45s ease; }
+.welcome { position: fixed; inset: 0; z-index: 100; pointer-events: none; opacity: 0; background: linear-gradient(160deg, #1c3a2f, #14281f); transition: opacity .3s ease; }
 .welcome.play { opacity: 1; }
-.welcome-bg { position: absolute; top: 0; bottom: 0; width: 50.2%; background: linear-gradient(160deg, #1c3a2f 0%, #14281f 55%, #0e1a14 100%); transition: transform .95s cubic-bezier(.77, 0, .18, 1); }
-.welcome-bg.l { left: 0; }
-.welcome-bg.r { right: 0; }
-.welcome.leave .welcome-bg.l { transform: translateX(-102%); }
-.welcome.leave .welcome-bg.r { transform: translateX(102%); }
-.welcome-glow { position: absolute; width: 520px; height: 520px; max-width: 90vw; max-height: 90vw; border-radius: 50%; background: radial-gradient(circle, rgba(201, 161, 74, .28), rgba(201, 161, 74, .08) 45%, transparent 70%); opacity: 0; }
-.welcome.play .welcome-glow { animation: welcomeGlow 3.4s ease-in-out .2s both; }
-.welcome-seam { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: linear-gradient(to bottom, transparent, rgba(201, 161, 74, .9), transparent); transform: scaleY(0); }
-.welcome.play .welcome-seam { animation: seamGrow 1.1s cubic-bezier(.2, .8, .2, 1) .1s both; }
-.welcome.leave .welcome-seam { opacity: 0; transition: opacity .3s; }
-.welcome-inner { position: relative; z-index: 2; text-align: center; color: #f8f5ee; padding: 0 24px; transition: opacity .5s ease, transform .7s ease; }
-.welcome.leave .welcome-inner { opacity: 0; transform: scale(1.06); }
-.welcome-logo { position: relative; width: 104px; height: 104px; margin: 0 auto 26px; display: grid; place-items: center; }
-.welcome-logo svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.welcome-logo circle { fill: none; stroke: #c9a14a; stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 289; stroke-dashoffset: 289; }
-.welcome.play .welcome-logo circle { animation: ringDraw 1.4s cubic-bezier(.65, 0, .25, 1) .35s forwards; }
-.welcome-logo span { width: 78px; height: 78px; border-radius: 50%; background: #c9a14a; color: #14281f; display: grid; place-items: center; font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; opacity: 0; }
-.welcome.play .welcome-logo span { animation: logoPop .9s cubic-bezier(.2, 1.3, .4, 1) .45s both; }
-.welcome-eyebrow { font-size: 10px; letter-spacing: 3.2px; font-weight: 700; color: #c9a14a; margin: 0 0 12px; opacity: 0; }
-.welcome.play .welcome-eyebrow { animation: welcomeUp .8s ease .95s both; }
-.welcome-name { font-family: 'Playfair Display', serif; font-size: clamp(34px, 6vw, 56px); font-weight: 600; font-style: italic; margin: 0; line-height: 1.15; opacity: 0; }
-.welcome.play .welcome-name { animation: welcomeName 1.1s cubic-bezier(.2, .8, .2, 1) 1.15s both; }
-.welcome-line { width: 0; height: 1px; background: linear-gradient(90deg, transparent, #c9a14a, transparent); margin: 22px auto 16px; }
-.welcome.play .welcome-line { animation: lineGrow .9s ease 1.75s both; }
-.welcome-sub { font-size: 13px; color: #cfd6c9; margin: 0; letter-spacing: .3px; opacity: 0; }
-.welcome.play .welcome-sub { animation: welcomeUp .8s ease 1.95s both; }
-.welcome-sparkles { position: absolute; inset: 0; pointer-events: none; }
-.welcome-sparkles i { position: absolute; border-radius: 50%; background: #e6cf94; box-shadow: 0 0 8px rgba(201, 161, 74, .9); opacity: 0; }
-.welcome.play .welcome-sparkles i { animation: sparkleUp linear infinite; }
-
-@keyframes welcomeGlow { 0% { opacity: 0; transform: scale(.6); } 40% { opacity: 1; } 100% { opacity: .7; transform: scale(1.15); } }
-@keyframes seamGrow { to { transform: scaleY(1); } }
-@keyframes ringDraw { to { stroke-dashoffset: 0; } }
-@keyframes logoPop { from { opacity: 0; transform: scale(.4) rotate(-40deg); } to { opacity: 1; transform: none; } }
-@keyframes welcomeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-@keyframes welcomeName { from { opacity: 0; transform: translateY(22px); letter-spacing: .14em; filter: blur(6px); } to { opacity: 1; transform: none; letter-spacing: -.01em; filter: none; } }
-@keyframes lineGrow { from { width: 0; opacity: 0; } to { width: 120px; opacity: 1; } }
-@keyframes sparkleUp { 0% { opacity: 0; transform: translateY(0) scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-260px) scale(1); } }
+.welcome.leave { opacity: 0; transition: opacity .6s ease; }
+body.page-enter main { animation: pageEnter .7s ease both; }
+@keyframes pageEnter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 /* RESPONSIVE TABLET */
 
