@@ -220,44 +220,23 @@ function setupGlobalEffects(){
   });
 }
 
-/* ================= ANIMASI SELAMAT DATANG (SETELAH LOGIN) ================= */
+/* ================= TRANSISI SETELAH LOGIN (SEDERHANA) ================= */
 let justLoggedIn=null; // "login" | "register", diisi saat user menekan tombol masuk/daftar
-function displayName(user){
-  const email=(user.email||"").toLowerCase();
-  if(ADMIN_EMAILS.includes(email))return "Admin";
-  const n=email.split("@")[0].replace(/[._-]+/g," ").trim()||"Pelanggan";
-  return n.charAt(0).toUpperCase()+n.slice(1);
-}
-function showWelcome(user,mode){
+function showWelcome(){
   if(reduceMotion)return;
-  const admin=ADMIN_EMAILS.includes((user.email||"").toLowerCase());
   const old=$("welcome");if(old)old.remove();
   const el=document.createElement("div");
   el.id="welcome";el.className="welcome";
-  el.innerHTML=`<div class="welcome-bg l"></div><div class="welcome-bg r"></div><div class="welcome-seam"></div><div class="welcome-glow"></div><div class="welcome-sparkles"></div>
-    <div class="welcome-inner">
-      <div class="welcome-logo"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg><span>LK</span></div>
-      <p class="welcome-eyebrow">${mode==="register"?"AKUN BERHASIL DIBUAT":"SELAMAT DATANG KEMBALI"}</p>
-      <h2 class="welcome-name">${escapeHtml(displayName(user))}</h2>
-      <div class="welcome-line"></div>
-      <p class="welcome-sub">${admin?"Dashboard laporan keuangan siap digunakan.":"Mari abadikan momen berharga Anda bersama kami."}</p>
-    </div>`;
-  const sp=el.querySelector(".welcome-sparkles");
-  for(let i=0;i<22;i++){
-    const d=document.createElement("i"),size=rnd(3,7);
-    d.style.cssText=`left:${rnd(4,96)}%;bottom:${rnd(-6,40)}%;width:${size}px;height:${size}px;animation-delay:${rnd(.5,2.4)}s;animation-duration:${rnd(2.4,4.2)}s`;
-    sp.appendChild(d);
-  }
   document.body.appendChild(el);
+  // 1) layar memudar ke hijau tua sebentar
   requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add("play")));
-  let closed=false;
-  const close=()=>{
-    if(closed)return;closed=true;clearTimeout(timer);
+  // 2) layar menghilang, halaman (admin / pesan) muncul halus dari bawah
+  setTimeout(()=>{
     el.classList.add("leave");
-    setTimeout(()=>el.remove(),1000);
-  };
-  const timer=setTimeout(close,3400);
-  el.addEventListener("click",close); // klik untuk melewati
+    document.body.classList.add("page-enter");
+    setTimeout(()=>document.body.classList.remove("page-enter"),900);
+  },450);
+  setTimeout(()=>el.remove(),1300);
 }
 
 /* ================= AUTH (ADMIN & USER) ================= */
@@ -313,7 +292,7 @@ $("registerBtn").addEventListener("click",async()=>{
 
 onAuthStateChanged(auth,user=>{
   currentUser=user;
-  if(user&&justLoggedIn){const mode=justLoggedIn;justLoggedIn=null;showWelcome(user,mode)}
+  if(user&&justLoggedIn){const mode=justLoggedIn;justLoggedIn=null;showWelcome()}
   isAdmin=!!user&&ADMIN_EMAILS.includes((user.email||"").toLowerCase());
   const isUser=!!user&&!isAdmin;
   document.body.classList.toggle("is-admin",isAdmin);
