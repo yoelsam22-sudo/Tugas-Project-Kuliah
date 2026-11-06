@@ -31,10 +31,10 @@ let qrTimer = null;
 let currentInvoiceId = null;
 
 const packages = [
-  {id:"photo-event",name:"Foto Event",price:750000,desc:"Dokumentasi foto acara hingga 3 jam.",tag:"POPULER"},
-  {id:"video-event",name:"Video Event",price:1200000,desc:"Video dokumentasi acara hingga 3 jam."},
-  {id:"photo-video",name:"Foto + Video",price:1750000,desc:"Paket lengkap foto dan video acara.",tag:"HEMAT"},
-  {id:"product",name:"Foto Produk",price:500000,desc:"Foto produk untuk katalog dan media sosial."}
+  {id:"photo-event",name:"Foto Event",price:750000,img:"paket-foto-event.jpg",desc:"Dokumentasi foto acara hingga 3 jam.",tag:"POPULER"},
+  {id:"video-event",name:"Video Event",price:1200000,img:"paket-video-event.jpg",desc:"Video dokumentasi acara hingga 3 jam."},
+  {id:"photo-video",name:"Foto + Video",price:1750000,img:"paket-foto-video.jpg",desc:"Paket lengkap foto dan video acara.",tag:"HEMAT"},
+  {id:"product",name:"Foto Produk",price:500000,img:"paket-foto-produk.jpg",desc:"Foto produk untuk katalog dan media sosial."}
 ];
 
 const $ = id => document.getElementById(id);
@@ -131,6 +131,19 @@ function setupReveal(){
     el.classList.add("reveal");
     el.style.setProperty("--d",((idx%4)*0.09)+"s");
     io.observe(el);
+  });
+}
+
+// foto hero: dimuat dulu di belakang layar, lalu muncul halus (tanpa kedip ganti foto)
+function setupHeroPhotos(){
+  [[".photo-back","foto1.jpg"],[".photo-front","foto2.jpg"]].forEach(([sel,src])=>{
+    const box=document.querySelector(sel);if(!box)return;
+    const img=new Image();
+    img.className="photo-img";img.alt="";img.decoding="async";img.fetchPriority="high";
+    img.onload=()=>img.classList.add("loaded");
+    img.onerror=()=>img.remove();
+    img.src=src;
+    box.prepend(img);
   });
 }
 
@@ -294,7 +307,7 @@ function historyHtml(tx){
 
 /* ================= PAKET & PEMESANAN ================= */
 function renderPackages(){
-  $("packageGrid").innerHTML=packages.map((p,i)=>`<article class="package-card ${i===2?"featured":""}" data-id="${p.id}" tabindex="0" role="button" aria-label="Pilih paket ${p.name}">${p.tag?`<span class="package-tag">${p.tag}</span>`:""}<span class="package-number">0${i+1}</span><h3>${p.name}</h3><p>${p.desc}</p><div class="package-price">${money(p.price)} <small>/ paket</small></div></article>`).join("");
+  $("packageGrid").innerHTML=packages.map((p,i)=>`<article class="package-card ${i===2?"featured":""}" data-id="${p.id}" tabindex="0" role="button" aria-label="Pilih paket ${p.name}"><div class="package-photo pp-${p.id}" style="--img:url('${p.img}')"></div>${p.tag?`<span class="package-tag">${p.tag}</span>`:""}<span class="package-number">0${i+1}</span><h3>${p.name}</h3><p>${p.desc}</p><div class="package-price">${money(p.price)} <small>/ paket</small></div></article>`).join("");
   $("packageSelect").innerHTML='<option value="">Pilih paket layanan</option>'+packages.map(p=>`<option value="${p.id}">${p.name} — ${money(p.price)}</option>`).join("");
 }
 function selectedPackage(){return packages.find(p=>p.id===$("packageSelect").value)}
@@ -453,5 +466,6 @@ onSnapshot(pubCol,snap=>{
 renderPublicFeed();
 setupPackageEffects();
 setupReveal();
+setupHeroPhotos();
 setupHeroEffects();
 setupGlobalEffects();
