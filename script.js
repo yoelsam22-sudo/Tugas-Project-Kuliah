@@ -134,19 +134,6 @@ function setupReveal(){
   });
 }
 
-// foto hero: dimuat dulu di belakang layar, lalu muncul halus (tanpa kedip ganti foto)
-function setupHeroPhotos(){
-  [[".photo-back","foto1.jpg"],[".photo-front","foto2.jpg"]].forEach(([sel,src])=>{
-    const box=document.querySelector(sel);if(!box)return;
-    const img=new Image();
-    img.className="photo-img";img.alt="";img.decoding="async";img.fetchPriority="high";
-    img.onload=()=>img.classList.add("loaded");
-    img.onerror=()=>img.remove();
-    img.src=src;
-    box.prepend(img);
-  });
-}
-
 function setupHeroEffects(){
   const hero=document.querySelector(".hero"),art=document.querySelector(".hero-art");
   if(!hero||reduceMotion)return;
@@ -466,6 +453,5 @@ onSnapshot(pubCol,snap=>{
 renderPublicFeed();
 setupPackageEffects();
 setupReveal();
-setupHeroPhotos();
 setupHeroEffects();
 setupGlobalEffects();
