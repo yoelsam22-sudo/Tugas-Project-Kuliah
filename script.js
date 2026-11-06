@@ -50,36 +50,6 @@ function showToast(message){$("toast").textContent=message;$("toast").classList.
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const rnd = (a,b) => a + Math.random()*(b-a);
 
-// satu gelembung: muncul di (x,y) lalu melayang ke arah (dx,dy) dan hilang
-function spawnBubble(x,y,{size=rnd(10,28),dx=0,dy=0,duration=900}={}){
-  if(reduceMotion)return;
-  const el=document.createElement("span");
-  el.className="bubble";
-  el.style.cssText=`left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
-  document.body.appendChild(el);
-  const anim=el.animate([
-    {transform:"translate(-50%,-50%) scale(.3)",opacity:.95},
-    {transform:`translate(calc(-50% + ${dx*.6}px),calc(-50% + ${dy*.6}px)) scale(1)`,opacity:.9,offset:.55},
-    {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.25)`,opacity:0}
-  ],{duration,easing:"cubic-bezier(.2,.7,.3,1)"});
-  anim.onfinish=()=>el.remove();
-}
-
-// ledakan gelembung ke segala arah
-function burstBubbles(x,y,count=16,small=false){
-  if(reduceMotion)return;
-  for(let i=0;i<count;i++){
-    const angle=rnd(0,Math.PI*2);
-    const dist=small?rnd(30,75):rnd(55,140);
-    spawnBubble(x,y,{
-      size:small?rnd(6,16):rnd(8,28),
-      dx:Math.cos(angle)*dist,
-      dy:Math.sin(angle)*dist-18,
-      duration:rnd(700,1200)
-    });
-  }
-}
-
 // confetti jatuh (dipakai saat pembayaran Lunas)
 function confetti(x,y,count=40){
   if(reduceMotion)return;
@@ -102,19 +72,17 @@ function confetti(x,y,count=40){
 
 // kartu paket diklik: pilih, atau batalkan kalau klik paket yang sama lagi
 function onPackageClick(card,x,y){
-  if(isAdmin){burstBubbles(x,y,20);return} // admin tidak memesan, cukup efek saja
+  if(isAdmin)return; // admin tidak memesan
   const p=packages.find(pk=>pk.id===card.dataset.id);if(!p)return;
 
   if($("packageSelect").value===p.id){
     $("packageSelect").value="";
     $("bookingPrice").textContent=money(0);
     syncSelectedCard();
-    burstBubbles(x,y,10,true);
     showToast("Pilihan paket dibatalkan.");
     return;
   }
 
-  burstBubbles(x,y,20);
   $("packageSelect").value=p.id;
   $("bookingPrice").textContent=money(p.price);
   syncSelectedCard();
@@ -126,7 +94,6 @@ function syncSelectedCard(){
 }
 
 function setupPackageEffects(){
-  let last=0;
   document.querySelectorAll(".package-card").forEach(card=>{
     card.addEventListener("mousemove",e=>{
       const r=card.getBoundingClientRect();
@@ -135,11 +102,6 @@ function setupPackageEffects(){
       card.style.setProperty("--my",(py*100)+"%");
       if(reduceMotion)return;
       card.style.transform=`perspective(700px) rotateX(${(.5-py)*8}deg) rotateY(${(px-.5)*8}deg) translateY(-4px)`;
-      const now=performance.now();
-      if(now-last>70){ // gelembung mengikuti kursor
-        last=now;
-        spawnBubble(e.clientX,e.clientY,{size:rnd(6,15),dx:rnd(-18,18),dy:-rnd(40,85),duration:rnd(900,1400)});
-      }
     });
     card.addEventListener("mouseleave",()=>{card.style.transform=""});
     card.addEventListener("click",e=>onPackageClick(card,e.clientX,e.clientY));
@@ -175,14 +137,6 @@ function setupReveal(){
 function setupHeroEffects(){
   const hero=document.querySelector(".hero"),art=document.querySelector(".hero-art");
   if(!hero||reduceMotion)return;
-  // gelembung melayang di background hero
-  const wrap=document.createElement("div");wrap.className="hero-bubbles";
-  for(let i=0;i<16;i++){
-    const s=document.createElement("span"),size=rnd(10,46);
-    s.style.cssText=`left:${rnd(0,100)}%;width:${size}px;height:${size}px;animation-duration:${rnd(9,18)}s;animation-delay:${-rnd(0,16)}s`;
-    wrap.appendChild(s);
-  }
-  hero.prepend(wrap);
   // foto hero bergeser pelan mengikuti mouse
   hero.addEventListener("mousemove",e=>{
     const r=hero.getBoundingClientRect();
@@ -209,15 +163,6 @@ function setupGlobalEffects(){
     addEventListener("mousemove",e=>{glow.style.transform=`translate(${e.clientX-150}px,${e.clientY-150}px)`;glow.style.opacity=1},{passive:true});
     document.addEventListener("mouseleave",()=>{glow.style.opacity=0});
   }
-
-  // gelembung kecil saat klik tombol
-  document.addEventListener("click",e=>{
-    const b=e.target.closest(".btn,.nav-login,.table-action,.link-btn");
-    if(!b)return;
-    const r=b.getBoundingClientRect();
-    const x=e.clientX||r.left+r.width/2,y=e.clientY||r.top+r.height/2;
-    burstBubbles(x,y,8,true);
-  });
 }
 
 /* ================= TRANSISI SETELAH LOGIN (SEDERHANA) ================= */
@@ -461,9 +406,8 @@ async function payInvoice(id){
   const updated={...tx,...upd};
   localTx.set(id,updated);
   renderInvoice(updated);showToast("Pembayaran berhasil (simulasi). Invoice berstatus Lunas.");
-  // perayaan: confetti + gelembung
+  // perayaan: confetti
   confetti(window.innerWidth/2,window.innerHeight*0.35);
-  burstBubbles(window.innerWidth/2,window.innerHeight*0.35,22);
 }
 
 /* ================= DASHBOARD (ADMIN) ================= */
