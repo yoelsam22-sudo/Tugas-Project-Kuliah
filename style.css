@@ -60,12 +60,10 @@ a { color: inherit; text-decoration: none; }
 
 .hero-art { height: 390px; position: relative; max-width: 470px; width: 100%; margin: auto; transition: transform .25s ease-out; }
 .photo { position: absolute; box-shadow: 0 25px 55px #3332; display: flex; flex-direction: column; justify-content: space-between; padding: 18px; color: #fff; font-size: 9px; letter-spacing: 2px; font-weight: 600; }
-.photo-back { width: 60%; height: 76%; top: 0; right: 2%; transform: rotate(7deg); background: linear-gradient(150deg, #c9d3c4, #6e8272 60%, #2f4a3c); animation: floatBack 7s ease-in-out infinite; }
-.photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .9s ease; }
-.photo-img.loaded { opacity: 1; }
+.photo-back { width: 60%; height: 76%; top: 0; right: 2%; transform: rotate(7deg); background: url("foto1.jpg") center / cover no-repeat, linear-gradient(150deg, #c9d3c4, #6e8272 60%, #2f4a3c); animation: floatBack 7s ease-in-out infinite; }
 .photo::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(10, 20, 16, .5), transparent 38%); }
 .photo-back span, .photo-front span { z-index: 1; text-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
-.photo-front { width: 58%; height: 78%; left: 5%; bottom: 0; transform: rotate(-7deg); background: linear-gradient(155deg, #f0d5b8, #d3a07e 55%, #7a5a4a); border: 8px solid #fffdf8; animation: floatFront 8s ease-in-out infinite; }
+.photo-front { width: 58%; height: 78%; left: 5%; bottom: 0; transform: rotate(-7deg); background: url("foto2.jpg") center / cover no-repeat, linear-gradient(155deg, #f0d5b8, #d3a07e 55%, #7a5a4a); border: 8px solid #fffdf8; animation: floatFront 8s ease-in-out infinite; }
 .camera-mark { font-size: 30px; z-index: 1; }
 .floating-note { position: absolute; right: -1%; bottom: 16%; background: #fffdf8; padding: 15px 18px; box-shadow: 0 10px 35px #3331; font-family: 'Playfair Display'; font-style: italic; color: var(--green); font-size: 15px; transform: rotate(3deg); animation: bobNote 5s ease-in-out infinite; }
 @keyframes floatBack { 0%, 100% { transform: rotate(7deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-14px); } }
