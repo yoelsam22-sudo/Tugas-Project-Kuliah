@@ -43,12 +43,12 @@
     </section>
 
     <section class="section" id="terbaru">
-      <div class="section-heading"><div><p class="eyebrow">KOMUNITAS LENSAKITA</p><h2>Pesanan terbaru</h2></div><p>Pantau status terbaru pesanan: menunggu, atau sudah disetujui fotografer. Nama disamarkan demi privasi pelanggan.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">KOMUNITAS LENSAKITA</p><h2>Pesanan terbaru</h2></div><p>Pantau status terbaru: menunggu persetujuan atau sudah disetujui fotografer. Nama disamarkan demi privasi pelanggan.</p></div>
       <div class="feed-list" id="publicFeed"></div>
     </section>
 
     <section class="booking-section" id="pesan">
-      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Masuk atau daftar akun, pilih tanggal, lalu tunggu persetujuan fotografer sebelum membayar secara cashless.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">MULAI CERITAMU</p><h2>Form pemesanan</h2></div><p>Masuk atau daftar akun, pilih tanggal, bayar secara cashless, lalu tunggu persetujuan fotografer.</p></div>
       <div class="booking-layout">
         <form id="bookingForm" class="panel form-panel">
           <label>Nama pelanggan<input id="customerName" required placeholder="Nama lengkap"></label>
@@ -63,8 +63,8 @@
         </form>
         <div class="panel how-panel">
           <span class="step-icon">01</span><h3>Pilih paket & tanggal</h3><p>Masuk atau daftar akun, lalu tentukan paket dan tanggal acara. Maksimal 5 pelanggan per hari.</p>
-          <span class="step-icon">02</span><h3>Persetujuan fotografer</h3><p>Pesanan berstatus Menunggu sampai fotografer menyetujui. Kamu mendapat notifikasi, dan bisa membatalkan kapan saja sebelum lunas.</p>
-          <span class="step-icon">03</span><h3>Bayar cashless & cetak invoice</h3><p>Setelah disetujui, bayar lewat QRIS, e-wallet, atau virtual account. Invoice beserta riwayat dapat dicetak.</p>
+          <span class="step-icon">02</span><h3>Bayar cashless</h3><p>Langsung bayar lewat QRIS, e-wallet, atau virtual account lewat payment gateway. Tidak ada pembayaran tunai.</p>
+          <span class="step-icon">03</span><h3>Persetujuan fotografer</h3><p>Fotografer menyetujui jadwal. Jika ditolak, kamu mendapat notifikasi dan dana dikembalikan. Pesanan juga bisa dibatalkan sebelum diputuskan.</p>
         </div>
       </div>
     </section>
@@ -87,16 +87,16 @@
     </section>
 
     <section class="dashboard-section" id="fotografer" hidden>
-      <div class="section-heading"><div><p class="eyebrow">AREA FOTOGRAFER</p><h2>Panel fotografer</h2></div><p>Lihat jadwal pesanan per tanggal, lalu setujui atau tolak sesuai ketersediaan. Maksimal 5 pelanggan per hari.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">AREA FOTOGRAFER</p><h2>Panel fotografer</h2></div><p>Pesanan yang sudah dibayar pelanggan muncul di sini. Setujui, atau tolak dengan alasan (dana otomatis dikembalikan). Maksimal 5 pelanggan per hari.</p></div>
       <div class="summary-grid four">
-        <div class="summary-card"><span>Menunggu persetujuan</span><strong id="pgPending">0</strong></div>
+        <div class="summary-card"><span>Perlu keputusan (sudah bayar)</span><strong id="pgPending">0</strong></div>
         <div class="summary-card"><span>Disetujui</span><strong id="pgApproved">0</strong></div>
         <div class="summary-card"><span>Ditolak</span><strong id="pgRejected">0</strong></div>
         <div class="summary-card"><span>Tanggal terisi</span><strong id="pgBusy">0</strong></div>
       </div>
       <div class="panel schedule-panel"><div class="table-title"><h3>Jadwal per tanggal</h3><span>Maksimal 5 pelanggan per hari</span></div><div class="schedule-chips" id="scheduleChips"></div></div>
       <div class="panel table-panel">
-        <div class="table-title"><h3>Permintaan pesanan</h3><div class="filter-tabs" id="pgTabs"><button type="button" data-pf="Menunggu">Menunggu</button><button type="button" data-pf="Disetujui">Disetujui</button><button type="button" data-pf="Ditolak">Ditolak</button><button type="button" data-pf="Semua">Semua</button></div></div>
+        <div class="table-title"><h3>Permintaan pesanan</h3><div class="filter-tabs" id="pgTabs"><button type="button" data-pf="Menunggu">Perlu keputusan</button><button type="button" data-pf="Disetujui">Disetujui</button><button type="button" data-pf="Ditolak">Ditolak</button><button type="button" data-pf="Belum bayar">Belum bayar</button><button type="button" data-pf="Semua">Semua</button></div></div>
         <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Paket</th><th>Tanggal layanan</th><th>Slot</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="pgRows"></tbody></table></div>
       </div>
     </section>
@@ -121,9 +121,9 @@
     <section class="manual-section section" id="manual">
       <p class="eyebrow">PANDUAN PENGGUNA</p><h2>Manual book singkat</h2>
       <div class="manual-grid">
-        <div><strong>01. Memesan</strong><p>Klik “Masuk / Daftar”, buat akun, lalu isi form pemesanan. Pilih paket dan tanggal (maksimal 5 pelanggan per hari). Pesanan berstatus Menunggu.</p></div>
-        <div><strong>02. Persetujuan &amp; notifikasi</strong><p>Fotografer menyetujui atau menolak. Hasilnya muncul di ikon lonceng. Jika ditolak (misalnya jadwal penuh), pilih tanggal lain. Pesanan bisa dibatalkan sebelum lunas.</p></div>
-        <div><strong>03. Pembayaran cashless</strong><p>Setelah disetujui, klik “Pilih Metode Pembayaran”: QRIS, e-wallet, atau virtual account. Tidak ada pembayaran tunai. Status otomatis Lunas.</p></div>
+        <div><strong>01. Memesan</strong><p>Klik “Masuk / Daftar”, buat akun, lalu isi form pemesanan. Pilih paket dan tanggal (maksimal 5 pelanggan per hari).</p></div>
+        <div><strong>02. Pembayaran cashless</strong><p>Setelah pesanan dibuat, layar pembayaran terbuka: pilih QRIS, e-wallet, atau virtual account. Tidak ada pembayaran tunai.</p></div>
+        <div><strong>03. Persetujuan &amp; notifikasi</strong><p>Fotografer menyetujui atau menolak pesanan yang sudah dibayar. Hasilnya muncul di ikon lonceng. Jika ditolak (misalnya jadwal penuh), dana dikembalikan dan kamu bisa memilih tanggal lain.</p></div>
         <div><strong>04. Fotografer &amp; admin</strong><p>Fotografer memakai Panel Fotografer untuk jadwal dan persetujuan. Admin memakai Dashboard untuk laporan keuangan dan unduh CSV.</p></div>
       </div>
     </section>
