@@ -255,6 +255,7 @@ onAuthStateChanged(auth,user=>{
   isPhotog=!!user&&!isAdmin&&emailIn(PHOTOGRAPHER_EMAILS,user.email);
   const isUser=!!user&&!isAdmin&&!isPhotog;
   document.body.classList.toggle("is-admin",isAdmin||isPhotog);
+  document.body.classList.toggle("is-photog",isPhotog);
   $("admin").hidden=!isAdmin;       $("navAdmin").hidden=!isAdmin;
   $("fotografer").hidden=!isPhotog; $("navPhotog").hidden=!isPhotog;
   $("pesananku").hidden=!isUser;    $("navMine").hidden=!isUser;
