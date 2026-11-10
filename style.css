@@ -444,3 +444,12 @@ body.page-enter main { animation: pageEnter .7s ease both; }
 @media print {
     #payModal, #reasonModal, #notifModal { display: none !important; }
 }
+
+/* MODE FOTOGRAFER: hanya informasi pelanggan & persetujuan jadwal */
+body.is-photog #beranda,
+body.is-photog #layanan,
+body.is-photog #artikel,
+body.is-photog #pesan,
+body.is-photog a[href="#layanan"],
+body.is-photog a[href="#artikel"],
+body.is-photog a[href="#pesan"] { display: none !important; }
