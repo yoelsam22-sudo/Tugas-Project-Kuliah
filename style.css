@@ -284,6 +284,8 @@ body.page-enter main { animation: pageEnter .7s ease both; }
 .status.rejected { background: #f6dcd8; color: #a13a2f; }
 .status.cancelled { background: #ebe8e0; color: #6f756c; }
 .table-action.danger { color: #a13a2f; }
+.table-action.pay { color: var(--orange); }
+.payment-box.ok { background: #eef5ea; }
 .empty-state { text-align: center; padding: 34px 18px; color: var(--muted); }
 .empty-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #efe6cf; margin: 0 auto 12px; font-size: 19px; }
 .empty-state strong { display: block; font-size: 13px; color: var(--ink); margin-bottom: 5px; }
