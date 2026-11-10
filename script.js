@@ -250,6 +250,7 @@ $("registerBtn").addEventListener("click",async()=>{
 
 onAuthStateChanged(auth,user=>{
   currentUser=user;
+  closeNotif();closeInvoice();closePay();closeReason();
   if(user&&justLoggedIn){justLoggedIn=null;showWelcome()}
   isAdmin=!!user&&emailIn(ADMIN_EMAILS,user.email);
   isPhotog=!!user&&!isAdmin&&emailIn(PHOTOGRAPHER_EMAILS,user.email);
@@ -344,6 +345,7 @@ function renderNotif(){
   }).join(""):emptyState("🔔","Belum ada notifikasi","Kabar persetujuan atau perubahan jadwal dari fotografer akan muncul di sini.");
 }
 function openNotif(){
+  if(!currentUser||isAdmin||isPhotog)return;
   $("notifModal").classList.add("show");$("notifModal").setAttribute("aria-hidden","false");
   notifItems().filter(t=>t.notifRead===false).forEach(t=>updateDoc(doc(db,"transaksi",t.id),{notifRead:true}).catch(console.error));
 }
