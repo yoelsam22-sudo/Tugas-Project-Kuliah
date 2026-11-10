@@ -17,6 +17,8 @@ const auth = getAuth(fbApp);
 const txCol = collection(db, "transaksi");
 const pubCol = collection(db, "pesanan_publik");
 const ADMIN_EMAILS = ["adminlensa@gmail.com"]; // email admin, samakan dengan Firestore Rules
+const PHOTOGRAPHER_EMAILS = ["fotografer@gmail.com"]; // email akun fotografer (daftar dulu lewat "Daftar Akun Baru"), samakan dengan Firestore Rules
+const MAX_PER_DAY = 5; // maksimal pelanggan aktif per tanggal layanan
 
 let cache = [];            // semua transaksi (khusus admin)
 let myCache = [];          // transaksi milik user yang login
@@ -24,10 +26,14 @@ let publicCache = [];      // feed pesanan publik (nama disamarkan)
 const localTx = new Map(); // pesanan yang baru dibuat di browser ini
 const qrExpiry = new Map();
 let isAdmin = false;
+let isPhotog = false;
+let notifPrev = new Map();
+let firstMine = true;
 let currentUser = null;
 let unsubscribe = null;
 let unsubMine = null;
 let qrTimer = null;
+let payTimer = null;
 let currentInvoiceId = null;
 
 const packages = [
@@ -45,6 +51,13 @@ function findTx(id){return cache.find(t=>t.id===id)||myCache.find(t=>t.id===id)|
 function invoiceNumber(){return "LK-"+new Date().getFullYear()+String(Date.now()).slice(-6)}
 function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showToast(message){$("toast").textContent=message;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
+
+/* ================= HELPER PERAN & STATUS ================= */
+const emailIn=(list,e)=>list.includes(String(e||"").toLowerCase());
+const roleHash=e=>emailIn(ADMIN_EMAILS,e)?"#admin":emailIn(PHOTOGRAPHER_EMAILS,e)?"#fotografer":"#pesan";
+const apr=t=>t.approval||"Disetujui"; // pesanan lama tanpa status dianggap disetujui
+const isActive=a=>a==="Menunggu"||a==="Disetujui";
+const dFmt=(d,o={day:"2-digit",month:"long",year:"numeric"})=>new Date(d+"T00:00:00").toLocaleDateString("id-ID",o);
 
 /* ================= EFEK VISUAL ================= */
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -72,7 +85,7 @@ function confetti(x,y,count=40){
 
 // kartu paket diklik: pilih, atau batalkan kalau klik paket yang sama lagi
 function onPackageClick(card,x,y){
-  if(isAdmin)return; // admin tidak memesan
+  if(isAdmin||isPhotog)return; // admin/fotografer tidak memesan
   const p=packages.find(pk=>pk.id===card.dataset.id);if(!p)return;
 
   if($("packageSelect").value===p.id){
@@ -212,9 +225,9 @@ $("loginForm").addEventListener("submit",async e=>{
   try{
     justLoggedIn="login";
     await signInWithEmailAndPassword(auth,email,pass);
-    const goAdmin=ADMIN_EMAILS.includes(email.toLowerCase());
+    const target=roleHash(email);
     closeLogin();showToast("Login berhasil. Selamat datang!");
-    setTimeout(()=>{location.hash=goAdmin?"#admin":"#pesan"},150);
+    setTimeout(()=>{location.hash=target},150);
   }catch(err){
     justLoggedIn=null;console.error(err);showToast(authMessage(err,"Login gagal."));
   }finally{btn.disabled=false;btn.textContent="Masuk"}
@@ -237,60 +250,104 @@ $("registerBtn").addEventListener("click",async()=>{
 
 onAuthStateChanged(auth,user=>{
   currentUser=user;
-  if(user&&justLoggedIn){const mode=justLoggedIn;justLoggedIn=null;showWelcome()}
-  isAdmin=!!user&&ADMIN_EMAILS.includes((user.email||"").toLowerCase());
-  const isUser=!!user&&!isAdmin;
-  document.body.classList.toggle("is-admin",isAdmin);
-  $("admin").hidden=!isAdmin;      $("navAdmin").hidden=!isAdmin;
-  $("pesananku").hidden=!isUser;   $("navMine").hidden=!isUser;
-  $("loginBtn").hidden=!!user;     $("logoutBtn").hidden=!user;
-  $("userEmail").hidden=!user;     $("userEmail").textContent=user?user.email:"";
+  if(user&&justLoggedIn){justLoggedIn=null;showWelcome()}
+  isAdmin=!!user&&emailIn(ADMIN_EMAILS,user.email);
+  isPhotog=!!user&&!isAdmin&&emailIn(PHOTOGRAPHER_EMAILS,user.email);
+  const isUser=!!user&&!isAdmin&&!isPhotog;
+  document.body.classList.toggle("is-admin",isAdmin||isPhotog);
+  $("admin").hidden=!isAdmin;       $("navAdmin").hidden=!isAdmin;
+  $("fotografer").hidden=!isPhotog; $("navPhotog").hidden=!isPhotog;
+  $("pesananku").hidden=!isUser;    $("navMine").hidden=!isUser;
+  $("notifBtn").hidden=!isUser;
+  $("loginBtn").hidden=!!user;      $("logoutBtn").hidden=!user;
+  $("userEmail").hidden=!user;      $("userEmail").textContent=user?user.email:"";
   if(unsubscribe){unsubscribe();unsubscribe=null}
   if(unsubMine){unsubMine();unsubMine=null}
-  cache=[];myCache=[];
+  cache=[];myCache=[];notifPrev=new Map();firstMine=true;
 
   const refreshOpenInvoice=()=>{
     if($("invoiceModal").classList.contains("show")&&currentInvoiceId){
       const tx=findTx(currentInvoiceId);if(tx)renderInvoice(tx);
     }
   };
-  if(isAdmin){
-    // realtime semua transaksi, hanya untuk admin
+  if(isAdmin||isPhotog){
+    // realtime semua transaksi: admin (laporan) dan fotografer (jadwal & persetujuan)
     unsubscribe=onSnapshot(txCol,snap=>{
       cache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-      renderDashboard();refreshOpenInvoice();
+      renderDashboard();renderPhotog();refreshOpenInvoice();
     },err=>{console.error(err);showToast("Gagal membaca database. Cek Rules Firestore.")});
   }else if(isUser){
     // realtime hanya pesanan milik user ini
     if(!$("customerContact").value)$("customerContact").value=user.email;
     unsubMine=onSnapshot(query(txCol,where("uid","==",user.uid)),snap=>{
       myCache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-      renderMine();refreshOpenInvoice();
+      notifyChanges();renderMine();renderNotif();refreshOpenInvoice();
     },err=>{console.error(err);showToast("Gagal membaca pesanan. Cek Rules Firestore.")});
   }
-  renderDashboard();renderMine();
+  renderDashboard();renderPhotog();renderMine();renderNotif();
   if(!isAdmin&&location.hash==="#admin")location.hash="#beranda";
+  if(!isPhotog&&location.hash==="#fotografer")location.hash="#beranda";
   if(!isUser&&location.hash==="#pesananku")location.hash="#beranda";
 });
 
-/* ================= FEED PUBLIK & PESANAN SAYA ================= */
+/* ================= FEED PUBLIK, PESANAN SAYA, NOTIFIKASI ================= */
 function maskName(name){
   const p=String(name||"").trim().split(/\s+/).filter(Boolean);
   if(!p.length)return "Pelanggan";
   if(p.length===1)return p[0].slice(0,3)+"***";
   return p[0]+" "+p[p.length-1][0].toUpperCase()+".";
 }
+const approvalClass={Menunggu:"pending",Disetujui:"approved",Ditolak:"rejected",Dibatalkan:"cancelled"};
+const approvalBadge=a=>`<span class="status ${approvalClass[a]||"pending"}">${escapeHtml(a)}</span>`;
+const payBadge=t=>`<span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span>`;
+const emptyState=(icon,title,text)=>`<div class="empty-state"><span class="empty-icon">${icon}</span><strong>${title}</strong><p>${text}</p></div>`;
+const canCancel=t=>isActive(apr(t))&&t.status!=="Lunas";
+
 function renderPublicFeed(){
-  $("publicFeed").innerHTML=publicCache.length?publicCache.slice(0,9).map(p=>`<div class="feed-item"><div class="feed-avatar">${escapeHtml((p.maskedName||"?")[0].toUpperCase())}</div><div class="feed-info"><strong>${escapeHtml(p.maskedName)}</strong><span>${escapeHtml(p.packageName)} · ${new Date(p.date+"T00:00:00").toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span></div><span class="status ${p.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(p.status)}</span></div>`).join(""):'<p class="empty">Belum ada pesanan. Jadilah yang pertama!</p>';
+  const list=publicCache.filter(p=>isActive(p.approval||"Disetujui")).slice(0,9);
+  $("publicFeed").innerHTML=list.length?list.map(p=>`<div class="feed-item"><div class="feed-avatar">${escapeHtml((p.maskedName||"?")[0].toUpperCase())}</div><div class="feed-info"><strong>${escapeHtml(p.maskedName)}</strong><span>${escapeHtml(p.packageName)} · ${dFmt(p.date,{day:"2-digit",month:"short",year:"numeric"})}</span></div><div class="feed-badges">${approvalBadge(p.approval||"Disetujui")}${p.status==="Lunas"?'<span class="status paid">Lunas</span>':""}</div></div>`).join(""):emptyState("✦","Belum ada pesanan","Jadilah yang pertama memesan jadwal pemotretan bersama LensaKita.");
 }
 function renderMine(){
-  $("myRows").innerHTML=myCache.length?myCache.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.packageName)}</td><td>${new Date(t.date+"T00:00:00").toLocaleDateString("id-ID")}</td><td>${money(t.price)}</td><td><span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span></td><td><button class="table-action" data-my="${escapeHtml(t.id)}">Invoice</button></td></tr>`).join(""):'<tr><td colspan="6" class="empty">Belum ada pesanan.</td></tr>';
+  $("myRows").innerHTML=myCache.length?myCache.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${money(t.price)}</td><td>${approvalBadge(apr(t))}</td><td>${payBadge(t)}</td><td><button class="table-action" data-my="${escapeHtml(t.id)}">Invoice</button>${canCancel(t)?`<button class="table-action danger" data-cancel="${escapeHtml(t.id)}">Batalkan</button>`:""}</td></tr>`).join(""):`<tr><td colspan="7">${emptyState("🗓","Belum ada pesanan","Pilih paket dan tanggal di bagian Pesan untuk membuat pesanan pertamamu.")}</td></tr>`;
   document.querySelectorAll("[data-my]").forEach(b=>b.addEventListener("click",()=>openInvoice(b.dataset.my)));
+  document.querySelectorAll("[data-cancel]").forEach(b=>b.addEventListener("click",()=>cancelOrder(b.dataset.cancel)));
 }
 function historyHtml(tx){
   const h=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}].concat(tx.status==="Lunas"?[{time:tx.paidAt,action:"Pembayaran diterima",method:tx.method,ref:"-",status:"Lunas"}]:[]);
-  return `<h4 class="history-title">Riwayat pembayaran</h4><table class="history-table"><thead><tr><th>Waktu</th><th>Aktivitas</th><th>Metode</th><th>Ref</th><th>Status</th></tr></thead><tbody>${h.map(x=>`<tr><td>${new Date(x.time).toLocaleString("id-ID")}</td><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.method||"-")}</td><td>${escapeHtml(x.ref||"-")}</td><td>${escapeHtml(x.status)}</td></tr>`).join("")}</tbody></table>`;
+  return `<h4 class="history-title">Riwayat pesanan &amp; pembayaran</h4><table class="history-table"><thead><tr><th>Waktu</th><th>Aktivitas</th><th>Metode</th><th>Ref</th><th>Status</th></tr></thead><tbody>${h.map(x=>`<tr><td>${new Date(x.time).toLocaleString("id-ID")}</td><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.method||"-")}</td><td>${escapeHtml(x.ref||"-")}</td><td>${escapeHtml(x.status)}</td></tr>`).join("")}</tbody></table>`;
 }
+
+// notifikasi untuk user: toast realtime + daftar di ikon lonceng
+function notifyChanges(){
+  myCache.forEach(t=>{
+    const prev=notifPrev.get(t.id),cur=apr(t);
+    if(!firstMine&&prev&&prev!==cur){
+      if(cur==="Disetujui")showToast(`Pesanan ${t.id} disetujui fotografer. Silakan lakukan pembayaran.`);
+      else if(cur==="Ditolak")showToast(`Pesanan ${t.id} ditolak: ${t.decisionReason||"jadwal penuh"}.`);
+    }
+    notifPrev.set(t.id,cur);
+  });
+  firstMine=false;
+}
+const notifItems=()=>myCache.filter(t=>t.decidedAt&&["Disetujui","Ditolak"].includes(apr(t))).sort((a,b)=>new Date(b.decidedAt)-new Date(a.decidedAt));
+function renderNotif(){
+  const items=notifItems(),unread=items.filter(t=>t.notifRead===false).length;
+  $("notifBadge").textContent=unread;$("notifBadge").hidden=!unread;
+  $("notifList").innerHTML=items.length?items.map(t=>{
+    const ok=apr(t)==="Disetujui";
+    const msg=ok?`Pesanan ${escapeHtml(t.id)} (${escapeHtml(t.packageName)}) untuk tanggal ${dFmt(t.date)} disetujui fotografer. Silakan lanjutkan pembayaran.`:`Pesanan ${escapeHtml(t.id)} untuk tanggal ${dFmt(t.date)} ditolak. Alasan: ${escapeHtml(t.decisionReason||"Jadwal penuh")}. Silakan pilih tanggal lain.`;
+    return `<div class="notif-item ${ok?"ok":"no"} ${t.notifRead===false?"unread":""}"><strong>${ok?"Pesanan disetujui":"Pesanan ditolak"}</strong><p>${msg}</p><span>${new Date(t.decidedAt).toLocaleString("id-ID")}</span>${ok?`<div><button class="table-action" data-notif-inv="${escapeHtml(t.id)}">Buka invoice</button></div>`:""}</div>`;
+  }).join(""):emptyState("🔔","Belum ada notifikasi","Kabar persetujuan atau perubahan jadwal dari fotografer akan muncul di sini.");
+}
+function openNotif(){
+  $("notifModal").classList.add("show");$("notifModal").setAttribute("aria-hidden","false");
+  notifItems().filter(t=>t.notifRead===false).forEach(t=>updateDoc(doc(db,"transaksi",t.id),{notifRead:true}).catch(console.error));
+}
+function closeNotif(){$("notifModal").classList.remove("show");$("notifModal").setAttribute("aria-hidden","true")}
+$("notifBtn").addEventListener("click",openNotif);
+$("closeNotif").addEventListener("click",closeNotif);
+$("notifModal").addEventListener("click",e=>{if(e.target===$("notifModal"))closeNotif()});
+$("notifList").addEventListener("click",e=>{const b=e.target.closest("[data-notif-inv]");if(b){closeNotif();openInvoice(b.dataset.notifInv)}});
 
 /* ================= PAKET & PEMESANAN ================= */
 function renderPackages(){
@@ -300,24 +357,38 @@ function renderPackages(){
 function selectedPackage(){return packages.find(p=>p.id===$("packageSelect").value)}
 $("packageSelect").addEventListener("change",()=>{$("bookingPrice").textContent=money(selectedPackage()?.price||0);syncSelectedCard()});
 $("serviceDate").min=todayISO();
+const slotsUsed=date=>publicCache.filter(p=>p.date===date&&isActive(p.approval||"Disetujui")).length;
+function updateSlotInfo(){
+  const el=$("slotInfo");if(!el)return;
+  const d=$("serviceDate").value;
+  if(!d){el.textContent=`Maksimal ${MAX_PER_DAY} pelanggan per hari. Pilih tanggal untuk melihat sisa slot.`;el.className="tiny slot";return}
+  const left=MAX_PER_DAY-slotsUsed(d);
+  el.textContent=left>0?`Sisa slot tanggal ini: ${left} dari ${MAX_PER_DAY}.`:`Jadwal tanggal ini sudah penuh (${MAX_PER_DAY}/${MAX_PER_DAY}). Silakan pilih tanggal lain.`;
+  el.className="tiny slot "+(left>0?"ok":"full");
+}
+$("serviceDate").addEventListener("input",updateSlotInfo);
 $("bookingForm").addEventListener("submit",e=>{
   e.preventDefault();
-  if(isAdmin){showToast("Admin tidak dapat membuat pesanan.");return}
-  if(!currentUser){showToast("Masuk atau daftar dulu untuk memesan.");openLogin("login");return}
+  if(isAdmin||isPhotog){showToast("Akun admin/fotografer tidak dapat membuat pesanan.");return}
+  if(!currentUser){showToast("Masuk atau daftar dulu untuk memesan.");openLogin();return}
   const pkg=selectedPackage();if(!pkg){showToast("Pilih paket terlebih dahulu.");return}
+  const date=$("serviceDate").value;
+  if(slotsUsed(date)>=MAX_PER_DAY){showToast(`Jadwal ${dFmt(date)} sudah penuh (maks. ${MAX_PER_DAY} pelanggan/hari). Pilih tanggal lain.`);updateSlotInfo();return}
   const now=new Date().toISOString();
-  const tx={id:invoiceNumber(),uid:currentUser.uid,email:currentUser.email,name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date:$("serviceDate").value,notes:$("notes").value.trim(),createdAt:now,status:"Belum dibayar",method:"-",paidAt:null,
-    history:[{time:now,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}]};
+  const tx={id:invoiceNumber(),uid:currentUser.uid,email:currentUser.email,name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date,notes:$("notes").value.trim(),createdAt:now,status:"Belum dibayar",method:"-",paidAt:null,
+    approval:"Menunggu",decisionReason:"",decidedAt:null,notifRead:true,
+    history:[{time:now,action:"Pesanan dibuat, menunggu persetujuan fotografer",method:"-",ref:"-",status:"Menunggu"}]};
   localTx.set(tx.id,tx);
   setDoc(doc(db,"transaksi",tx.id),tx).catch(err=>{console.error(err);showToast("Gagal menyimpan ke database.")});
   // feed publik: hanya nama disamarkan, paket, tanggal, status (tanpa kontak & harga)
-  setDoc(doc(db,"pesanan_publik",tx.id),{id:tx.id,maskedName:maskName(tx.name),packageName:tx.packageName,date:tx.date,createdAt:now,status:tx.status}).catch(console.error);
-  openInvoice(tx.id,tx);$("bookingForm").reset();$("customerContact").value=currentUser.email;$("bookingPrice").textContent=money(0);syncSelectedCard();showToast("Pesanan berhasil dibuat. Invoice siap dilihat.");
+  setDoc(doc(db,"pesanan_publik",tx.id),{id:tx.id,maskedName:maskName(tx.name),packageName:tx.packageName,date:tx.date,createdAt:now,status:tx.status,approval:"Menunggu"}).catch(console.error);
+  openInvoice(tx.id,tx);$("bookingForm").reset();$("customerContact").value=currentUser.email;$("bookingPrice").textContent=money(0);syncSelectedCard();updateSlotInfo();
+  showToast("Pesanan terkirim. Menunggu persetujuan fotografer.");
 });
 
 /* ================= INVOICE ================= */
 function openInvoice(id,txGiven){const tx=txGiven||findTx(id);if(!tx)return;currentInvoiceId=id;renderInvoice(tx);$("invoiceModal").classList.add("show");$("invoiceModal").setAttribute("aria-hidden","false")}
-function closeInvoice(){clearInterval(qrTimer);$("invoiceModal").classList.remove("show");$("invoiceModal").setAttribute("aria-hidden","true")}
+function closeInvoice(){$("invoiceModal").classList.remove("show");$("invoiceModal").setAttribute("aria-hidden","true")}
 $("closeInvoice").addEventListener("click",closeInvoice);
 $("invoiceModal").addEventListener("click",e=>{if(e.target===$("invoiceModal"))closeInvoice()});
 $("printInvoice").addEventListener("click",()=>window.print());
@@ -338,76 +409,178 @@ function fakeQrSvg(seed){
 }
 function fmtCountdown(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
 
+function stepperHtml(tx){
+  const a=apr(tx),paid=tx.status==="Lunas",bad=a==="Ditolak"||a==="Dibatalkan";
+  const s2=bad?`<li class="bad"><b>✕</b><span>${a}</span></li>`:`<li class="${a==="Disetujui"?"done":"now"}"><b>${a==="Disetujui"?"✓":"2"}</b><span>${a==="Disetujui"?"Disetujui fotografer":"Menunggu persetujuan"}</span></li>`;
+  const s3=`<li class="${paid?"done":(a==="Disetujui"?"now":"")}"><b>${paid?"✓":"3"}</b><span>${paid?"Lunas":"Pembayaran cashless"}</span></li>`;
+  return `<ol class="stepper"><li class="done"><b>✓</b><span>Pesanan dibuat</span></li>${s2}${s3}</ol>`;
+}
+
 function renderInvoice(tx){
-  clearInterval(qrTimer);
+  const ap=apr(tx),paid=tx.status==="Lunas";
   const date=new Date(tx.createdAt).toLocaleDateString("id-ID",{day:"2-digit",month:"long",year:"numeric"});
-  const serviceDate=new Date(tx.date+"T00:00:00").toLocaleDateString("id-ID",{day:"2-digit",month:"long",year:"numeric"});
-  const paid=tx.status==="Lunas";
-  if(!paid&&!qrExpiry.has(tx.id))qrExpiry.set(tx.id,Date.now()+15*60*1000);
+  const serviceDate=dFmt(tx.date);
+  const mine=!!currentUser&&tx.uid===currentUser.uid&&!isAdmin&&!isPhotog;
+  const stamp=paid?'<span class="paid-stamp">LUNAS</span>':ap==="Ditolak"?'<span class="paid-stamp red">DITOLAK</span>':ap==="Dibatalkan"?'<span class="paid-stamp grey">DIBATALKAN</span>':`<span class="invoice-label">${ap==="Menunggu"?"MENUNGGU PERSETUJUAN":"MENUNGGU PEMBAYARAN"}</span>`;
+  let action="";
+  if(!paid&&mine){
+    if(ap==="Menunggu")action=`<div class="payment-box"><h3>Menunggu persetujuan fotografer</h3><p class="invoice-note">Pesanan kamu sedang ditinjau. Pembayaran dibuka setelah fotografer menyetujui jadwal ini. Kamu akan menerima notifikasi begitu ada keputusan.</p><div class="payment-controls"><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
+    else if(ap==="Disetujui")action=`<div class="payment-box"><h3>Pembayaran</h3><p class="invoice-note">Pesanan disetujui. Semua pembayaran memakai metode cashless: QRIS, e-wallet, atau virtual account.</p><div class="payment-controls"><button class="btn primary" id="openPay">Pilih Metode Pembayaran</button><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
+    else if(ap==="Ditolak")action=`<div class="payment-box reject"><h3>Pesanan ditolak</h3><p class="invoice-note">Alasan: ${escapeHtml(tx.decisionReason||"Jadwal pada tanggal tersebut penuh.")} Silakan pilih tanggal lain.</p><div class="payment-controls"><button class="btn primary" id="newOrder">Buat Pesanan Baru</button></div></div>`;
+  }
+  const extra=(ap==="Ditolak"?`<br>Alasan penolakan: ${escapeHtml(tx.decisionReason||"-")}`:"")+(ap==="Dibatalkan"?`<br>Alasan pembatalan: ${escapeHtml(tx.cancelReason||"-")}`:"");
   $("invoiceContent").innerHTML=`
-    <div class="invoice-head"><div><span class="invoice-label">INVOICE / ${escapeHtml(tx.id)}</span><h2>LensaKita Studio</h2><p>Jasa Fotografi & Videografi<br>Dokumentasi momen berharga Anda.</p></div><div>${paid?'<span class="paid-stamp">LUNAS</span>':'<span class="invoice-label">MENUNGGU PEMBAYARAN</span>'}<p>Tanggal invoice: ${date}<br>Tanggal layanan: ${serviceDate}</p></div></div>
+    <div class="invoice-head"><div><span class="invoice-label">INVOICE / ${escapeHtml(tx.id)}</span><h2>LensaKita Studio</h2><p>Jasa Fotografi & Videografi<br>Dokumentasi momen berharga Anda.</p></div><div>${stamp}<p>Tanggal invoice: ${date}<br>Tanggal layanan: ${serviceDate}</p></div></div>
+    ${stepperHtml(tx)}
     <div class="invoice-meta"><div><h4>Ditagihkan kepada</h4><strong>${escapeHtml(tx.name)}</strong><p>${escapeHtml(tx.contact)}</p></div><div><h4>Detail pesanan</h4><strong>${escapeHtml(tx.packageName)}</strong><p>${escapeHtml(tx.notes||"Tidak ada catatan tambahan.")}</p></div></div>
     <table><thead><tr><th>Deskripsi</th><th>Jumlah</th><th>Harga</th></tr></thead><tbody><tr><td>${escapeHtml(tx.packageName)}</td><td>1 paket</td><td>${money(tx.price)}</td></tr></tbody></table>
     <div class="invoice-total"><span>Total pembayaran</span><strong>${money(tx.price)}</strong></div>
     ${historyHtml(tx)}
-    <p class="invoice-note">Status: <strong>${escapeHtml(tx.status)}</strong>${paid?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi dan bukan transaksi uang sungguhan.</p>
-    ${paid?"":`<div class="payment-box">
-      <h3>Pembayaran (simulasi)</h3>
-      <div class="payment-controls">
-        <select id="paymentMethod">
-          <option value="QRIS">QRIS (simulasi)</option>
-          <option value="Transfer Internal">Transfer Internal (simulasi)</option>
-          <option value="Tunai">Tunai</option>
-        </select>
-      </div>
-      <div class="qris-box" id="qrisBox">
-        <div class="qris-head"><strong>QRIS</strong><span>LENSAKITA STUDIO</span></div>
-        <div class="qris-code">${fakeQrSvg(tx.id)}</div>
-        <div class="qris-amount">${money(tx.price)}</div>
-        <p class="qris-timer">Berlaku <strong id="qrisTimer">15:00</strong> <button type="button" class="link-btn" id="refreshQr">Perbarui QR</button></p>
-        <p class="invoice-note">Ini QR simulasi untuk tugas, tidak bisa dibayar lewat aplikasi bank/e-wallet asli. Klik tombol di bawah untuk mensimulasikan pelanggan sudah scan & bayar.</p>
-      </div>
-      <button class="btn primary" id="confirmPayment">Simulasikan Scan & Bayar</button>
-    </div>`}
-  `;
-  if(paid)return;
-  const select=$("paymentMethod"),qrisBox=$("qrisBox"),btn=$("confirmPayment");
-  const sync=()=>{
-    const isQris=select.value==="QRIS";
-    qrisBox.hidden=!isQris;
-    btn.textContent=isQris?"Simulasikan Scan & Bayar":"Konfirmasi Pembayaran";
-  };
-  select.addEventListener("change",sync);sync();
-  btn.addEventListener("click",()=>payInvoice(tx.id));
-  const tick=()=>{
-    const left=qrExpiry.get(tx.id)-Date.now(),t=$("qrisTimer");if(!t)return;
-    if(left<=0){t.textContent="KEDALUWARSA";if(select.value==="QRIS")btn.disabled=true;return}
-    t.textContent=fmtCountdown(left);
-  };
-  $("refreshQr").addEventListener("click",()=>{qrExpiry.set(tx.id,Date.now()+15*60*1000);btn.disabled=false;tick();showToast("QR diperbarui.")});
-  tick();qrTimer=setInterval(tick,1000);
+    <p class="invoice-note">Persetujuan: <strong>${escapeHtml(ap)}</strong> · Pembayaran: <strong>${escapeHtml(tx.status)}</strong>${paid?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}${extra}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi cashless dan bukan transaksi uang sungguhan.</p>
+    ${action}`;
+  if($("openPay"))$("openPay").addEventListener("click",()=>openPay(tx.id));
+  if($("cancelOrder"))$("cancelOrder").addEventListener("click",()=>cancelOrder(tx.id));
+  if($("newOrder"))$("newOrder").addEventListener("click",()=>{closeInvoice();location.hash="#pesan"});
 }
 
-async function payInvoice(id){
-  const select=$("paymentMethod");
-  const method=select?.value==="QRIS"?"QRIS (simulasi)":(select?.value||"Transfer Internal");
-  const tx=findTx(id);if(!tx)return;
-  const btn=$("confirmPayment");
-  if(select?.value==="QRIS"){
-    btn.disabled=true;btn.textContent="Memverifikasi pembayaran...";
-    await new Promise(r=>setTimeout(r,1500));
+/* ----- tampilan pembayaran cashless (QRIS, e-wallet, virtual account) ----- */
+const wallets=[["gopay","GoPay","#00aa5b"],["ovo","OVO","#4c2a86"],["dana","DANA","#118eea"],["shopeepay","ShopeePay","#ee4d2d"]];
+const banks=[["bca","BCA","#0060af","39"],["bri","BRI","#00529c","88"],["mandiri","Mandiri","#003d79","89"],["bni","BNI","#e2711d","98"]];
+let payTxId=null,payGroup="qris",payWallet="gopay",payBank="bca",payPhone="";
+const chip=(n,c)=>`<span class="logo-chip" style="background:${c}">${n}</span>`;
+function openPay(id){payTxId=id;payGroup="qris";$("payModal").classList.add("show");$("payModal").setAttribute("aria-hidden","false");renderPay()}
+function closePay(){clearInterval(payTimer);$("payModal").classList.remove("show");$("payModal").setAttribute("aria-hidden","true")}
+$("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))closePay()});
+
+function renderPay(){
+  clearInterval(payTimer);
+  const tx=findTx(payTxId);if(!tx){closePay();return}
+  const w=wallets.find(x=>x[0]===payWallet),bk=banks.find(x=>x[0]===payBank);
+  const vaNo=bk[3]+"0"+tx.id.replace(/\D/g,"").padStart(12,"0");
+  let detail="";
+  if(payGroup==="qris"){
+    if(!qrExpiry.has(tx.id))qrExpiry.set(tx.id,Date.now()+15*60*1000);
+    detail=`<div class="pay-detail-head"><strong>Bayar dengan QRIS</strong><p>Scan kode QR memakai aplikasi e-wallet atau mobile banking apa pun.</p></div>
+      <div class="qris-box"><div class="qris-head"><strong>QRIS</strong><span>LENSAKITA STUDIO</span></div><div class="qris-code">${fakeQrSvg(tx.id)}</div><div class="qris-amount">${money(tx.price)}</div><p class="qris-timer">Berlaku <strong id="qrisTimer">15:00</strong> <button type="button" class="link-btn" id="refreshQr">Perbarui QR</button></p></div>
+      <button class="btn primary" id="payConfirm">Simulasikan Scan & Bayar</button>`;
+  }else if(payGroup==="ewallet"){
+    detail=`<div class="pay-detail-head"><strong>Bayar dengan E-Wallet</strong><p>Pilih dompet digital, lalu masukkan nomor HP yang terdaftar.</p></div>
+      <div class="logo-grid">${wallets.map(x=>`<button type="button" class="logo-pick ${x[0]===payWallet?"active":""}" data-wallet="${x[0]}">${chip(x[1],x[2])}</button>`).join("")}</div>
+      <label>Nomor HP ${w[1]}<input id="payPhone" inputmode="numeric" maxlength="14" placeholder="08xxxxxxxxxx" value="${escapeHtml(payPhone)}"></label>
+      <button class="btn primary" id="payConfirm">Bayar ${money(tx.price)} dengan ${w[1]}</button>`;
+  }else{
+    detail=`<div class="pay-detail-head"><strong>Transfer Virtual Account</strong><p>Pilih bank, lalu transfer ke nomor virtual account di bawah.</p></div>
+      <div class="logo-grid">${banks.map(x=>`<button type="button" class="logo-pick ${x[0]===payBank?"active":""}" data-bank="${x[0]}">${chip(x[1],x[2])}</button>`).join("")}</div>
+      <div class="va-box"><div><small>Nomor Virtual Account ${bk[1]}</small><span>${vaNo}</span></div><button type="button" class="link-btn" id="copyVa">Salin</button></div>
+      <ol class="pay-steps"><li>Buka aplikasi mobile banking ${bk[1]}.</li><li>Pilih Transfer, lalu Virtual Account.</li><li>Masukkan nomor di atas dan nominal ${money(tx.price)}.</li></ol>
+      <button class="btn primary" id="payConfirm">Simulasikan Transfer</button>`;
   }
+  const group=(id,logos,title,sub)=>`<button type="button" class="pay-method ${payGroup===id?"active":""}" data-group="${id}"><div class="chip-row">${logos}</div><div><strong>${title}</strong><small>${sub}</small></div></button>`;
+  $("payContent").innerHTML=`
+    <div class="pay-head"><div><span class="invoice-label">PEMBAYARAN CASHLESS</span><h2>${money(tx.price)}</h2><p>Invoice ${escapeHtml(tx.id)} · ${escapeHtml(tx.packageName)}</p></div><button class="btn ghost" id="closePay">Tutup</button></div>
+    <div class="pay-layout">
+      <div class="pay-methods">
+        ${group("qris",chip("QRIS","#c8102e"),"QRIS","Scan dengan aplikasi apa pun")}
+        ${group("ewallet",wallets.map(x=>chip(x[1],x[2])).join(""),"E-Wallet","GoPay, OVO, DANA, ShopeePay")}
+        ${group("va",banks.map(x=>chip(x[1],x[2])).join(""),"Virtual Account","BCA, BRI, Mandiri, BNI")}
+      </div>
+      <div class="pay-detail">${detail}</div>
+    </div>
+    <p class="invoice-note">Tanpa pembayaran tunai. Ini simulasi untuk tugas dan tidak memotong saldo sungguhan.</p>`;
+  $("closePay").onclick=closePay;
+  document.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{payGroup=b.dataset.group;renderPay()});
+  document.querySelectorAll("[data-wallet]").forEach(b=>b.onclick=()=>{payPhone=$("payPhone")?.value||payPhone;payWallet=b.dataset.wallet;renderPay()});
+  document.querySelectorAll("[data-bank]").forEach(b=>b.onclick=()=>{payBank=b.dataset.bank;renderPay()});
+  $("payConfirm").onclick=()=>confirmPay(tx.id);
+  if($("copyVa"))$("copyVa").onclick=()=>{navigator.clipboard?.writeText(vaNo).then(()=>showToast("Nomor virtual account disalin.")).catch(()=>showToast("Salin manual: "+vaNo))};
+  if(payGroup==="qris"){
+    const tick=()=>{
+      const left=qrExpiry.get(tx.id)-Date.now(),t=$("qrisTimer"),btn=$("payConfirm");if(!t)return;
+      if(left<=0){t.textContent="KEDALUWARSA";if(btn)btn.disabled=true;return}
+      t.textContent=fmtCountdown(left);
+    };
+    $("refreshQr").onclick=()=>{qrExpiry.set(tx.id,Date.now()+15*60*1000);$("payConfirm").disabled=false;tick();showToast("QR diperbarui.")};
+    tick();payTimer=setInterval(tick,1000);
+  }
+}
+
+async function confirmPay(id){
+  const tx=findTx(id);if(!tx)return;
+  if(apr(tx)!=="Disetujui"){showToast("Pembayaran dibuka setelah pesanan disetujui fotografer.");return}
+  let method;
+  if(payGroup==="qris")method="QRIS (simulasi)";
+  else if(payGroup==="ewallet"){
+    const phone=($("payPhone").value||"").trim();
+    if(!/^\d{9,14}$/.test(phone)){showToast("Masukkan nomor HP yang valid (9 sampai 14 digit).");return}
+    payPhone=phone;method=`E-Wallet ${wallets.find(x=>x[0]===payWallet)[1]} (simulasi)`;
+  }else method=`Virtual Account ${banks.find(x=>x[0]===payBank)[1]} (simulasi)`;
+  const btn=$("payConfirm");btn.disabled=true;btn.textContent="Memverifikasi pembayaran...";
+  await new Promise(r=>setTimeout(r,1600));
+  await markPaid(tx,method);
+  closePay();
+}
+async function markPaid(tx,method){
   const now=new Date().toISOString();
   const ref="PAY-"+Math.random().toString(36).slice(2,8).toUpperCase();
   const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
   const upd={status:"Lunas",method,paidAt:now,payRef:ref,history:[...base,{time:now,action:"Pembayaran diterima",method,ref,status:"Lunas"}]};
-  updateDoc(doc(db,"transaksi",id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
-  updateDoc(doc(db,"pesanan_publik",id),{status:"Lunas"}).catch(console.error);
+  updateDoc(doc(db,"transaksi",tx.id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
+  updateDoc(doc(db,"pesanan_publik",tx.id),{status:"Lunas"}).catch(console.error);
   const updated={...tx,...upd};
-  localTx.set(id,updated);
+  localTx.set(tx.id,updated);
   renderInvoice(updated);showToast("Pembayaran berhasil (simulasi). Invoice berstatus Lunas.");
-  // perayaan: confetti
   confetti(window.innerWidth/2,window.innerHeight*0.35);
+}
+
+/* ----- jendela alasan (dipakai untuk pembatalan & penolakan) ----- */
+let reasonCb=null;
+function askReason({eyebrow,title,desc,presets,okLabel,onConfirm}){
+  $("reasonEyebrow").textContent=eyebrow;$("reasonTitle").textContent=title;$("reasonDesc").textContent=desc;$("reasonOk").textContent=okLabel;
+  $("reasonPreset").innerHTML=presets.map(p=>`<option>${escapeHtml(p)}</option>`).join("");
+  $("reasonText").value="";reasonCb=onConfirm;
+  $("reasonModal").classList.add("show");$("reasonModal").setAttribute("aria-hidden","false");
+}
+function closeReason(){$("reasonModal").classList.remove("show");$("reasonModal").setAttribute("aria-hidden","true");reasonCb=null}
+$("reasonCancel").addEventListener("click",closeReason);
+$("reasonModal").addEventListener("click",e=>{if(e.target===$("reasonModal"))closeReason()});
+$("reasonForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const extra=$("reasonText").value.trim(),r=$("reasonPreset").value+(extra?" — "+extra:""),cb=reasonCb;
+  closeReason();if(cb)cb(r);
+});
+
+// pembatalan oleh pelanggan (hanya sebelum lunas)
+function cancelOrder(id){
+  const tx=findTx(id);if(!tx||!canCancel(tx))return;
+  askReason({eyebrow:"PEMBATALAN PESANAN",title:"Batalkan pesanan?",desc:`Pesanan ${id} akan dibatalkan dan slot tanggal ${dFmt(tx.date)} dilepas.`,
+    presets:["Berubah rencana","Salah memilih paket atau tanggal","Menemukan layanan lain","Lainnya"],okLabel:"Ya, Batalkan",
+    onConfirm:reason=>{
+      const now=new Date().toISOString();
+      const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
+      const upd={approval:"Dibatalkan",cancelReason:reason,cancelledAt:now,history:[...base,{time:now,action:"Dibatalkan oleh pelanggan: "+reason,method:"-",ref:"-",status:"Dibatalkan"}]};
+      updateDoc(doc(db,"transaksi",id),upd).catch(err=>{console.error(err);showToast("Gagal membatalkan pesanan.")});
+      updateDoc(doc(db,"pesanan_publik",id),{approval:"Dibatalkan"}).catch(console.error);
+      const updated={...tx,...upd};localTx.set(id,updated);
+      if(currentInvoiceId===id)renderInvoice(updated);
+      showToast("Pesanan dibatalkan.");
+    }});
+}
+
+// keputusan fotografer: setujui atau tolak dengan alasan
+function applyDecision(tx,decision,reason){
+  const now=new Date().toISOString();
+  const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Menunggu"}];
+  const upd={approval:decision,decisionReason:reason||"",decidedAt:now,notifRead:false,history:[...base,{time:now,action:decision==="Disetujui"?"Disetujui oleh fotografer":"Ditolak oleh fotografer: "+reason,method:"-",ref:"-",status:decision}]};
+  updateDoc(doc(db,"transaksi",tx.id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan keputusan. Cek Rules Firestore.")});
+  updateDoc(doc(db,"pesanan_publik",tx.id),{approval:decision}).catch(console.error);
+  showToast(decision==="Disetujui"?`Pesanan ${tx.id} disetujui.`:`Pesanan ${tx.id} ditolak. Pelanggan akan diberi notifikasi.`);
+}
+function decideOrder(id,decision){
+  const tx=findTx(id);if(!tx||apr(tx)!=="Menunggu")return;
+  if(decision==="Disetujui"){applyDecision(tx,"Disetujui","");return}
+  askReason({eyebrow:"TOLAK PESANAN",title:"Tolak pesanan ini?",desc:`Pelanggan akan menerima notifikasi untuk tanggal ${dFmt(tx.date)}.`,
+    presets:["Jadwal pada tanggal tersebut penuh","Fotografer berhalangan hadir","Lokasi di luar jangkauan","Lainnya"],okLabel:"Tolak Pesanan",
+    onConfirm:r=>applyDecision(tx,"Ditolak",r)});
 }
 
 /* ================= DASHBOARD (ADMIN) ================= */
@@ -416,18 +589,20 @@ function filteredTransactions(){
   return data.filter(t=>{const d=new Date(t.createdAt);if(filter==="week"){const start=new Date(now);start.setDate(now.getDate()-6);start.setHours(0,0,0,0);return d>=start&&d<=now}if(filter==="month")return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();return true});
 }
 function renderDashboard(){
-  const data=filteredTransactions();const paid=data.filter(t=>t.status==="Lunas").reduce((s,t)=>s+t.price,0);const unpaid=data.filter(t=>t.status!=="Lunas").reduce((s,t)=>s+t.price,0);
+  const data=filteredTransactions();
+  const paid=data.filter(t=>t.status==="Lunas").reduce((s,t)=>s+t.price,0);
+  const unpaid=data.filter(t=>t.status!=="Lunas"&&isActive(apr(t))).reduce((s,t)=>s+t.price,0);
   $("totalTransactions").textContent=data.length;$("totalRevenue").textContent=money(paid);$("unpaidTotal").textContent=money(unpaid);
   const f=$("reportFilter").value;$("reportRange").textContent=f==="week"?"7 hari terakhir":f==="month"?"Bulan ini":"Semua periode";
-  $("transactionRows").innerHTML=data.length?data.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.packageName)}</td><td>${new Date(t.date+"T00:00:00").toLocaleDateString("id-ID")}</td><td>${money(t.price)}</td><td><span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span></td><td><button class="table-action" data-invoice="${escapeHtml(t.id)}">Invoice</button></td></tr>`).join(""):'<tr><td colspan="7" class="empty">Tidak ada transaksi pada periode ini.</td></tr>';
+  $("transactionRows").innerHTML=data.length?data.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${money(t.price)}</td><td>${approvalBadge(apr(t))}</td><td>${payBadge(t)}</td><td><button class="table-action" data-invoice="${escapeHtml(t.id)}">Invoice</button></td></tr>`).join(""):`<tr><td colspan="8">${emptyState("📊","Belum ada transaksi","Transaksi pelanggan akan muncul di sini setelah ada pesanan masuk pada periode ini.")}</td></tr>`;
   document.querySelectorAll("[data-invoice]").forEach(btn=>btn.addEventListener("click",()=>openInvoice(btn.dataset.invoice)));
 }
 $("reportFilter").addEventListener("change",renderDashboard);
 $("exportCsv").addEventListener("click",()=>{
   if(!isAdmin)return;
   const rows=filteredTransactions();if(!rows.length){showToast("Belum ada data untuk diunduh.");return}
-  const header=["Invoice","Nama","Kontak","Paket","Tanggal Layanan","Total","Status","Metode Pembayaran","Tanggal Transaksi"];
-  const csv=[header,...rows.map(t=>[t.id,t.name,t.contact,t.packageName,t.date,t.price,t.status,t.method,t.createdAt])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  const header=["Invoice","Nama","Kontak","Paket","Tanggal Layanan","Total","Persetujuan","Alasan","Status Pembayaran","Metode Pembayaran","Tanggal Transaksi"];
+  const csv=[header,...rows.map(t=>[t.id,t.name,t.contact,t.packageName,t.date,t.price,apr(t),t.decisionReason||t.cancelReason||"",t.status,t.method,t.createdAt])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="laporan-lensakita.csv";a.click();URL.revokeObjectURL(url);showToast("Laporan CSV berhasil diunduh.");
 });
 $("clearData").addEventListener("click",async()=>{
@@ -441,14 +616,42 @@ $("clearData").addEventListener("click",async()=>{
   }
 });
 
+/* ================= PANEL FOTOGRAFER ================= */
+let pFilter="Menunggu";
+function renderPhotog(){
+  if(!$("pgRows"))return;
+  const by=a=>cache.filter(t=>apr(t)===a);
+  $("pgPending").textContent=by("Menunggu").length;$("pgApproved").textContent=by("Disetujui").length;$("pgRejected").textContent=by("Ditolak").length;
+  const dates={};cache.filter(t=>isActive(apr(t))).forEach(t=>{(dates[t.date]=dates[t.date]||[]).push(t)});
+  const keys=Object.keys(dates).sort();
+  $("pgBusy").textContent=keys.length;
+  $("scheduleChips").innerHTML=keys.length?keys.map(d=>{
+    const n=dates[d].length,pend=dates[d].filter(t=>apr(t)==="Menunggu").length;
+    return `<div class="chip-date ${n>=MAX_PER_DAY?"full":""}"><strong>${dFmt(d,{day:"2-digit",month:"short",year:"numeric"})}</strong><span>${n}/${MAX_PER_DAY} pelanggan${n>=MAX_PER_DAY?" · PENUH":""}${pend?` · ${pend} menunggu`:""}</span></div>`;
+  }).join(""):emptyState("📅","Belum ada jadwal","Pesanan yang masuk akan muncul di sini, dikelompokkan per tanggal layanan.");
+  document.querySelectorAll("#pgTabs [data-pf]").forEach(b=>b.classList.toggle("active",b.dataset.pf===pFilter));
+  const rows=(pFilter==="Semua"?cache:cache.filter(t=>apr(t)===pFilter)).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  $("pgRows").innerHTML=rows.length?rows.map(t=>{
+    const a=apr(t),n=(dates[t.date]||[]).length;
+    const acts=a==="Menunggu"?`<button class="btn primary sm" data-decide="Disetujui" data-id="${escapeHtml(t.id)}">Setujui</button><button class="btn danger sm" data-decide="Ditolak" data-id="${escapeHtml(t.id)}">Tolak</button>`:"";
+    return `<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.name)}<span class="cell-sub">${escapeHtml(t.contact)}</span>${t.notes?`<span class="cell-sub">Catatan: ${escapeHtml(t.notes)}</span>`:""}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${n}/${MAX_PER_DAY}</td><td>${approvalBadge(a)} ${payBadge(t)}</td><td class="act-cell">${acts}<button class="table-action" data-pg-inv="${escapeHtml(t.id)}">Invoice</button></td></tr>`;
+  }).join(""):`<tr><td colspan="7">${emptyState("📥",pFilter==="Menunggu"?"Tidak ada permintaan baru":"Tidak ada data","Permintaan pesanan dari pelanggan akan tampil di sini untuk disetujui atau ditolak.")}</td></tr>`;
+  document.querySelectorAll("[data-decide]").forEach(b=>b.addEventListener("click",()=>decideOrder(b.dataset.id,b.dataset.decide)));
+  document.querySelectorAll("[data-pg-inv]").forEach(b=>b.addEventListener("click",()=>openInvoice(b.dataset.pgInv)));
+}
+$("pgTabs").addEventListener("click",e=>{const b=e.target.closest("[data-pf]");if(!b)return;pFilter=b.dataset.pf;renderPhotog()});
+
 /* ================= INISIALISASI ================= */
 renderPackages();
 renderDashboard();
+renderPhotog();
 renderMine();
+renderNotif();
+updateSlotInfo();
 // feed publik: realtime, bisa dilihat semua pengunjung
 onSnapshot(pubCol,snap=>{
   publicCache=snap.docs.map(d=>d.data()).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  renderPublicFeed();
+  renderPublicFeed();updateSlotInfo();
 },err=>console.error(err));
 renderPublicFeed();
 setupPackageEffects();
