@@ -299,18 +299,21 @@ function maskName(name){
 }
 const approvalClass={Menunggu:"pending",Disetujui:"approved",Ditolak:"rejected",Dibatalkan:"cancelled"};
 const approvalBadge=a=>`<span class="status ${approvalClass[a]||"pending"}">${escapeHtml(a)}</span>`;
-const payBadge=t=>`<span class="status ${t.status==="Lunas"?"paid":"unpaid"}">${escapeHtml(t.status)}</span>`;
+const payBadge=t=>`<span class="status ${t.status==="Lunas"?"paid":t.status==="Dikembalikan"?"cancelled":"unpaid"}">${escapeHtml(t.status)}</span>`;
 const emptyState=(icon,title,text)=>`<div class="empty-state"><span class="empty-icon">${icon}</span><strong>${title}</strong><p>${text}</p></div>`;
-const canCancel=t=>isActive(apr(t))&&t.status!=="Lunas";
+// pelanggan bisa membatalkan kapan saja selama pesanan masih aktif, termasuk setelah bayar atau disetujui (dana dikembalikan, simulasi)
+const canCancel=t=>isActive(apr(t));
+const needsAction=t=>apr(t)==="Menunggu"&&t.status==="Lunas"; // sudah bayar, menunggu keputusan fotografer
 
 function renderPublicFeed(){
-  const list=publicCache.filter(p=>isActive(p.approval||"Disetujui")).slice(0,9);
-  $("publicFeed").innerHTML=list.length?list.map(p=>`<div class="feed-item"><div class="feed-avatar">${escapeHtml((p.maskedName||"?")[0].toUpperCase())}</div><div class="feed-info"><strong>${escapeHtml(p.maskedName)}</strong><span>${escapeHtml(p.packageName)} · ${dFmt(p.date,{day:"2-digit",month:"short",year:"numeric"})}</span></div><div class="feed-badges">${approvalBadge(p.approval||"Disetujui")}${p.status==="Lunas"?'<span class="status paid">Lunas</span>':""}</div></div>`).join(""):emptyState("✦","Belum ada pesanan","Jadilah yang pertama memesan jadwal pemotretan bersama LensaKita.");
+  const list=publicCache.filter(p=>{const a=p.approval||"Disetujui";return isActive(a)&&(a==="Disetujui"||p.status==="Lunas")}).slice(0,9);
+  $("publicFeed").innerHTML=list.length?list.map(p=>`<div class="feed-item"><div class="feed-avatar">${escapeHtml((p.maskedName||"?")[0].toUpperCase())}</div><div class="feed-info"><strong>${escapeHtml(p.maskedName)}</strong><span>${escapeHtml(p.packageName)} · ${dFmt(p.date,{day:"2-digit",month:"short",year:"numeric"})}</span></div>${approvalBadge(p.approval||"Disetujui")}</div>`).join(""):emptyState("✦","Belum ada pesanan","Jadilah yang pertama memesan jadwal pemotretan bersama LensaKita.");
 }
 function renderMine(){
-  $("myRows").innerHTML=myCache.length?myCache.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${money(t.price)}</td><td>${approvalBadge(apr(t))}</td><td>${payBadge(t)}</td><td><button class="table-action" data-my="${escapeHtml(t.id)}">Invoice</button>${canCancel(t)?`<button class="table-action danger" data-cancel="${escapeHtml(t.id)}">Batalkan</button>`:""}</td></tr>`).join(""):`<tr><td colspan="7">${emptyState("🗓","Belum ada pesanan","Pilih paket dan tanggal di bagian Pesan untuk membuat pesanan pertamamu.")}</td></tr>`;
+  $("myRows").innerHTML=myCache.length?myCache.map(t=>`<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${money(t.price)}</td><td>${approvalBadge(apr(t))}</td><td>${payBadge(t)}</td><td>${t.status==="Belum dibayar"&&isActive(apr(t))?`<button class="table-action pay" data-pay="${escapeHtml(t.id)}">Bayar</button>`:""}<button class="table-action" data-my="${escapeHtml(t.id)}">Invoice</button>${canCancel(t)?`<button class="table-action danger" data-cancel="${escapeHtml(t.id)}">Batalkan</button>`:""}</td></tr>`).join(""):`<tr><td colspan="7">${emptyState("🗓","Belum ada pesanan","Pilih paket dan tanggal di bagian Pesan untuk membuat pesanan pertamamu.")}</td></tr>`;
   document.querySelectorAll("[data-my]").forEach(b=>b.addEventListener("click",()=>openInvoice(b.dataset.my)));
   document.querySelectorAll("[data-cancel]").forEach(b=>b.addEventListener("click",()=>cancelOrder(b.dataset.cancel)));
+  document.querySelectorAll("[data-pay]").forEach(b=>b.addEventListener("click",()=>openPay(b.dataset.pay)));
 }
 function historyHtml(tx){
   const h=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}].concat(tx.status==="Lunas"?[{time:tx.paidAt,action:"Pembayaran diterima",method:tx.method,ref:"-",status:"Lunas"}]:[]);
@@ -322,8 +325,8 @@ function notifyChanges(){
   myCache.forEach(t=>{
     const prev=notifPrev.get(t.id),cur=apr(t);
     if(!firstMine&&prev&&prev!==cur){
-      if(cur==="Disetujui")showToast(`Pesanan ${t.id} disetujui fotografer. Silakan lakukan pembayaran.`);
-      else if(cur==="Ditolak")showToast(`Pesanan ${t.id} ditolak: ${t.decisionReason||"jadwal penuh"}.`);
+      if(cur==="Disetujui")showToast(`Pesanan ${t.id} disetujui fotografer.`);
+      else if(cur==="Ditolak")showToast(`Pesanan ${t.id} ditolak: ${t.decisionReason||"jadwal penuh"}. Dana dikembalikan.`);
     }
     notifPrev.set(t.id,cur);
   });
@@ -335,7 +338,7 @@ function renderNotif(){
   $("notifBadge").textContent=unread;$("notifBadge").hidden=!unread;
   $("notifList").innerHTML=items.length?items.map(t=>{
     const ok=apr(t)==="Disetujui";
-    const msg=ok?`Pesanan ${escapeHtml(t.id)} (${escapeHtml(t.packageName)}) untuk tanggal ${dFmt(t.date)} disetujui fotografer. Silakan lanjutkan pembayaran.`:`Pesanan ${escapeHtml(t.id)} untuk tanggal ${dFmt(t.date)} ditolak. Alasan: ${escapeHtml(t.decisionReason||"Jadwal penuh")}. Silakan pilih tanggal lain.`;
+    const msg=ok?`Pesanan ${escapeHtml(t.id)} (${escapeHtml(t.packageName)}) untuk tanggal ${dFmt(t.date)} disetujui fotografer. Sampai jumpa di jadwal pemotretan.`:`Pesanan ${escapeHtml(t.id)} untuk tanggal ${dFmt(t.date)} ditolak. Alasan: ${escapeHtml(t.decisionReason||"Jadwal penuh")}. Dana ${money(t.price)} dikembalikan (simulasi). Silakan pilih tanggal lain.`;
     return `<div class="notif-item ${ok?"ok":"no"} ${t.notifRead===false?"unread":""}"><strong>${ok?"Pesanan disetujui":"Pesanan ditolak"}</strong><p>${msg}</p><span>${new Date(t.decidedAt).toLocaleString("id-ID")}</span>${ok?`<div><button class="table-action" data-notif-inv="${escapeHtml(t.id)}">Buka invoice</button></div>`:""}</div>`;
   }).join(""):emptyState("🔔","Belum ada notifikasi","Kabar persetujuan atau perubahan jadwal dari fotografer akan muncul di sini.");
 }
@@ -377,13 +380,14 @@ $("bookingForm").addEventListener("submit",e=>{
   const now=new Date().toISOString();
   const tx={id:invoiceNumber(),uid:currentUser.uid,email:currentUser.email,name:$("customerName").value.trim(),contact:$("customerContact").value.trim(),packageId:pkg.id,packageName:pkg.name,price:pkg.price,date,notes:$("notes").value.trim(),createdAt:now,status:"Belum dibayar",method:"-",paidAt:null,
     approval:"Menunggu",decisionReason:"",decidedAt:null,notifRead:true,
-    history:[{time:now,action:"Pesanan dibuat, menunggu persetujuan fotografer",method:"-",ref:"-",status:"Menunggu"}]};
+    history:[{time:now,action:"Pesanan dibuat, menunggu pembayaran",method:"-",ref:"-",status:"Belum dibayar"}]};
   localTx.set(tx.id,tx);
   setDoc(doc(db,"transaksi",tx.id),tx).catch(err=>{console.error(err);showToast("Gagal menyimpan ke database.")});
   // feed publik: hanya nama disamarkan, paket, tanggal, status (tanpa kontak & harga)
   setDoc(doc(db,"pesanan_publik",tx.id),{id:tx.id,maskedName:maskName(tx.name),packageName:tx.packageName,date:tx.date,createdAt:now,status:tx.status,approval:"Menunggu"}).catch(console.error);
   openInvoice(tx.id,tx);$("bookingForm").reset();$("customerContact").value=currentUser.email;$("bookingPrice").textContent=money(0);syncSelectedCard();updateSlotInfo();
-  showToast("Pesanan terkirim. Menunggu persetujuan fotografer.");
+  showToast("Pesanan dibuat. Selesaikan pembayaran agar fotografer dapat meninjau.");
+  setTimeout(()=>openPay(tx.id),350);
 });
 
 /* ================= INVOICE ================= */
@@ -410,34 +414,37 @@ function fakeQrSvg(seed){
 function fmtCountdown(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
 
 function stepperHtml(tx){
-  const a=apr(tx),paid=tx.status==="Lunas",bad=a==="Ditolak"||a==="Dibatalkan";
-  const s2=bad?`<li class="bad"><b>✕</b><span>${a}</span></li>`:`<li class="${a==="Disetujui"?"done":"now"}"><b>${a==="Disetujui"?"✓":"2"}</b><span>${a==="Disetujui"?"Disetujui fotografer":"Menunggu persetujuan"}</span></li>`;
-  const s3=`<li class="${paid?"done":(a==="Disetujui"?"now":"")}"><b>${paid?"✓":"3"}</b><span>${paid?"Lunas":"Pembayaran cashless"}</span></li>`;
+  const a=apr(tx),paidEver=tx.status==="Lunas"||tx.status==="Dikembalikan",closed=a==="Ditolak"||a==="Dibatalkan";
+  const s2=`<li class="${paidEver?"done":(closed?"":"now")}"><b>${paidEver?"✓":"2"}</b><span>${paidEver?"Pembayaran diterima":"Menunggu pembayaran"}</span></li>`;
+  const s3=closed?`<li class="bad"><b>✕</b><span>${a}</span></li>`:a==="Disetujui"?`<li class="done"><b>✓</b><span>Disetujui fotografer</span></li>`:`<li class="${paidEver?"now":""}"><b>3</b><span>${paidEver?"Menunggu persetujuan":"Persetujuan fotografer"}</span></li>`;
   return `<ol class="stepper"><li class="done"><b>✓</b><span>Pesanan dibuat</span></li>${s2}${s3}</ol>`;
 }
 
 function renderInvoice(tx){
-  const ap=apr(tx),paid=tx.status==="Lunas";
+  const ap=apr(tx),paid=tx.status==="Lunas",refunded=tx.status==="Dikembalikan";
   const date=new Date(tx.createdAt).toLocaleDateString("id-ID",{day:"2-digit",month:"long",year:"numeric"});
   const serviceDate=dFmt(tx.date);
   const mine=!!currentUser&&tx.uid===currentUser.uid&&!isAdmin&&!isPhotog;
-  const stamp=paid?'<span class="paid-stamp">LUNAS</span>':ap==="Ditolak"?'<span class="paid-stamp red">DITOLAK</span>':ap==="Dibatalkan"?'<span class="paid-stamp grey">DIBATALKAN</span>':`<span class="invoice-label">${ap==="Menunggu"?"MENUNGGU PERSETUJUAN":"MENUNGGU PEMBAYARAN"}</span>`;
+  const stamp=ap==="Ditolak"?'<span class="paid-stamp red">DITOLAK</span>':ap==="Dibatalkan"?'<span class="paid-stamp grey">DIBATALKAN</span>':ap==="Disetujui"&&paid?'<span class="paid-stamp">DISETUJUI</span>':`<span class="invoice-label">${paid?"MENUNGGU PERSETUJUAN":"MENUNGGU PEMBAYARAN"}</span>`;
+  const payBox=`<div class="payment-box"><h3>Selesaikan pembayaran</h3><p class="invoice-note">Bayar lewat QRIS, e-wallet, atau virtual account (semua cashless). Fotografer baru meninjau pesanan setelah pembayaran diterima.</p><div class="payment-controls"><button class="btn primary" id="openPay">Pilih Metode Pembayaran</button><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
   let action="";
-  if(!paid&&mine){
-    if(ap==="Menunggu")action=`<div class="payment-box"><h3>Menunggu persetujuan fotografer</h3><p class="invoice-note">Pesanan kamu sedang ditinjau. Pembayaran dibuka setelah fotografer menyetujui jadwal ini. Kamu akan menerima notifikasi begitu ada keputusan.</p><div class="payment-controls"><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
-    else if(ap==="Disetujui")action=`<div class="payment-box"><h3>Pembayaran</h3><p class="invoice-note">Pesanan disetujui. Semua pembayaran memakai metode cashless: QRIS, e-wallet, atau virtual account.</p><div class="payment-controls"><button class="btn primary" id="openPay">Pilih Metode Pembayaran</button><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
-    else if(ap==="Ditolak")action=`<div class="payment-box reject"><h3>Pesanan ditolak</h3><p class="invoice-note">Alasan: ${escapeHtml(tx.decisionReason||"Jadwal pada tanggal tersebut penuh.")} Silakan pilih tanggal lain.</p><div class="payment-controls"><button class="btn primary" id="newOrder">Buat Pesanan Baru</button></div></div>`;
+  if(mine){
+    if(ap==="Menunggu"&&!paid)action=payBox;
+    else if(ap==="Menunggu"&&paid)action=`<div class="payment-box"><h3>Pembayaran diterima</h3><p class="invoice-note">Pesanan sedang menunggu persetujuan fotografer. Kamu akan menerima notifikasi begitu ada keputusan. Jika ditolak, dana dikembalikan otomatis (simulasi).</p><div class="payment-controls"><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
+    else if(ap==="Disetujui"&&!paid)action=payBox;
+    else if(ap==="Disetujui")action=`<div class="payment-box ok"><h3>Pesanan disetujui</h3><p class="invoice-note">Pembayaran sudah diterima dan fotografer menyetujui jadwal ${serviceDate}. Sampai jumpa di hari pemotretan. Jika berhalangan, kamu masih bisa membatalkan dan dana dikembalikan (simulasi).</p><div class="payment-controls"><button class="btn ghost" id="cancelOrder">Batalkan Pesanan</button></div></div>`;
+    else if(ap==="Ditolak")action=`<div class="payment-box reject"><h3>Pesanan ditolak</h3><p class="invoice-note">Alasan: ${escapeHtml(tx.decisionReason||"Jadwal pada tanggal tersebut penuh.")}${refunded?` Dana ${money(tx.price)} sudah dikembalikan (simulasi).`:""} Silakan pilih tanggal lain.</p><div class="payment-controls"><button class="btn primary" id="newOrder">Buat Pesanan Baru</button></div></div>`;
   }
   const extra=(ap==="Ditolak"?`<br>Alasan penolakan: ${escapeHtml(tx.decisionReason||"-")}`:"")+(ap==="Dibatalkan"?`<br>Alasan pembatalan: ${escapeHtml(tx.cancelReason||"-")}`:"");
   $("invoiceContent").innerHTML=`
     <div class="invoice-head"><div><span class="invoice-label">INVOICE / ${escapeHtml(tx.id)}</span><h2>LensaKita Studio</h2><p>Jasa Fotografi & Videografi<br>Dokumentasi momen berharga Anda.</p></div><div>${stamp}<p>Tanggal invoice: ${date}<br>Tanggal layanan: ${serviceDate}</p></div></div>
     ${stepperHtml(tx)}
+    ${action}
     <div class="invoice-meta"><div><h4>Ditagihkan kepada</h4><strong>${escapeHtml(tx.name)}</strong><p>${escapeHtml(tx.contact)}</p></div><div><h4>Detail pesanan</h4><strong>${escapeHtml(tx.packageName)}</strong><p>${escapeHtml(tx.notes||"Tidak ada catatan tambahan.")}</p></div></div>
     <table><thead><tr><th>Deskripsi</th><th>Jumlah</th><th>Harga</th></tr></thead><tbody><tr><td>${escapeHtml(tx.packageName)}</td><td>1 paket</td><td>${money(tx.price)}</td></tr></tbody></table>
     <div class="invoice-total"><span>Total pembayaran</span><strong>${money(tx.price)}</strong></div>
     ${historyHtml(tx)}
-    <p class="invoice-note">Persetujuan: <strong>${escapeHtml(ap)}</strong> · Pembayaran: <strong>${escapeHtml(tx.status)}</strong>${paid?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}${extra}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi cashless dan bukan transaksi uang sungguhan.</p>
-    ${action}`;
+    <p class="invoice-note">Pembayaran: <strong>${escapeHtml(tx.status)}</strong> · Persetujuan: <strong>${escapeHtml(ap)}</strong>${(paid||refunded)&&tx.paidAt?`<br>Metode: ${escapeHtml(tx.method)}<br>Waktu pembayaran: ${new Date(tx.paidAt).toLocaleString("id-ID")}`:""}${extra}<br><br>Terima kasih telah memilih LensaKita Studio. Simpan invoice ini sebagai bukti pemesanan. Untuk versi tugas ini, pembayaran merupakan simulasi cashless dan bukan transaksi uang sungguhan.</p>`;
   if($("openPay"))$("openPay").addEventListener("click",()=>openPay(tx.id));
   if($("cancelOrder"))$("cancelOrder").addEventListener("click",()=>cancelOrder(tx.id));
   if($("newOrder"))$("newOrder").addEventListener("click",()=>{closeInvoice();location.hash="#pesan"});
@@ -477,7 +484,7 @@ function renderPay(){
   }
   const group=(id,logos,title,sub)=>`<button type="button" class="pay-method ${payGroup===id?"active":""}" data-group="${id}"><div class="chip-row">${logos}</div><div><strong>${title}</strong><small>${sub}</small></div></button>`;
   $("payContent").innerHTML=`
-    <div class="pay-head"><div><span class="invoice-label">PEMBAYARAN CASHLESS</span><h2>${money(tx.price)}</h2><p>Invoice ${escapeHtml(tx.id)} · ${escapeHtml(tx.packageName)}</p></div><button class="btn ghost" id="closePay">Tutup</button></div>
+    <div class="pay-head"><div><span class="invoice-label">PAYMENT GATEWAY · SIMULASI CASHLESS</span><h2>${money(tx.price)}</h2><p>Invoice ${escapeHtml(tx.id)} · ${escapeHtml(tx.packageName)}</p></div><button class="btn ghost" id="closePay">Tutup</button></div>
     <div class="pay-layout">
       <div class="pay-methods">
         ${group("qris",chip("QRIS","#c8102e"),"QRIS","Scan dengan aplikasi apa pun")}
@@ -486,7 +493,7 @@ function renderPay(){
       </div>
       <div class="pay-detail">${detail}</div>
     </div>
-    <p class="invoice-note">Tanpa pembayaran tunai. Ini simulasi untuk tugas dan tidak memotong saldo sungguhan.</p>`;
+    <p class="invoice-note">Tanpa pembayaran tunai. Setelah bayar, pesanan menunggu persetujuan fotografer; jika ditolak, dana dikembalikan otomatis. Ini simulasi dan tidak memotong saldo sungguhan.</p>`;
   $("closePay").onclick=closePay;
   document.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{payGroup=b.dataset.group;renderPay()});
   document.querySelectorAll("[data-wallet]").forEach(b=>b.onclick=()=>{payPhone=$("payPhone")?.value||payPhone;payWallet=b.dataset.wallet;renderPay()});
@@ -506,7 +513,7 @@ function renderPay(){
 
 async function confirmPay(id){
   const tx=findTx(id);if(!tx)return;
-  if(apr(tx)!=="Disetujui"){showToast("Pembayaran dibuka setelah pesanan disetujui fotografer.");return}
+  if(!isActive(apr(tx))||tx.status==="Lunas"){showToast("Pesanan ini tidak dapat dibayar.");return}
   let method;
   if(payGroup==="qris")method="QRIS (simulasi)";
   else if(payGroup==="ewallet"){
@@ -523,12 +530,12 @@ async function markPaid(tx,method){
   const now=new Date().toISOString();
   const ref="PAY-"+Math.random().toString(36).slice(2,8).toUpperCase();
   const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
-  const upd={status:"Lunas",method,paidAt:now,payRef:ref,history:[...base,{time:now,action:"Pembayaran diterima",method,ref,status:"Lunas"}]};
+  const upd={status:"Lunas",method,paidAt:now,payRef:ref,history:[...base,{time:now,action:"Pembayaran diterima, menunggu persetujuan fotografer",method,ref,status:"Lunas"}]};
   updateDoc(doc(db,"transaksi",tx.id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
   updateDoc(doc(db,"pesanan_publik",tx.id),{status:"Lunas"}).catch(console.error);
   const updated={...tx,...upd};
   localTx.set(tx.id,updated);
-  renderInvoice(updated);showToast("Pembayaran berhasil (simulasi). Invoice berstatus Lunas.");
+  renderInvoice(updated);showToast("Pembayaran berhasil. Pesanan menunggu persetujuan fotografer.");
   confetti(window.innerWidth/2,window.innerHeight*0.35);
 }
 
@@ -549,36 +556,44 @@ $("reasonForm").addEventListener("submit",e=>{
   closeReason();if(cb)cb(r);
 });
 
-// pembatalan oleh pelanggan (hanya sebelum lunas)
+// pembatalan oleh pelanggan (jika sudah bayar, dana dikembalikan)
 function cancelOrder(id){
   const tx=findTx(id);if(!tx||!canCancel(tx))return;
-  askReason({eyebrow:"PEMBATALAN PESANAN",title:"Batalkan pesanan?",desc:`Pesanan ${id} akan dibatalkan dan slot tanggal ${dFmt(tx.date)} dilepas.`,
+  const paid=tx.status==="Lunas";
+  askReason({eyebrow:"PEMBATALAN PESANAN",title:"Batalkan pesanan?",desc:`Pesanan ${id} akan dibatalkan dan slot tanggal ${dFmt(tx.date)} dilepas.${paid?" Dana akan dikembalikan (simulasi).":""}`,
     presets:["Berubah rencana","Salah memilih paket atau tanggal","Menemukan layanan lain","Lainnya"],okLabel:"Ya, Batalkan",
     onConfirm:reason=>{
       const now=new Date().toISOString();
       const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
-      const upd={approval:"Dibatalkan",cancelReason:reason,cancelledAt:now,history:[...base,{time:now,action:"Dibatalkan oleh pelanggan: "+reason,method:"-",ref:"-",status:"Dibatalkan"}]};
+      const hist=[...base,{time:now,action:"Dibatalkan oleh pelanggan: "+reason,method:"-",ref:"-",status:"Dibatalkan"}];
+      const upd={approval:"Dibatalkan",cancelReason:reason,cancelledAt:now};
+      if(paid){upd.status="Dikembalikan";upd.refundedAt=now;hist.push({time:now,action:"Dana dikembalikan ke pelanggan (simulasi)",method:tx.method,ref:tx.payRef||"-",status:"Dikembalikan"})}
+      upd.history=hist;
       updateDoc(doc(db,"transaksi",id),upd).catch(err=>{console.error(err);showToast("Gagal membatalkan pesanan.")});
       updateDoc(doc(db,"pesanan_publik",id),{approval:"Dibatalkan"}).catch(console.error);
       const updated={...tx,...upd};localTx.set(id,updated);
       if(currentInvoiceId===id)renderInvoice(updated);
-      showToast("Pesanan dibatalkan.");
+      showToast(paid?"Pesanan dibatalkan. Dana dikembalikan (simulasi).":"Pesanan dibatalkan.");
     }});
 }
 
-// keputusan fotografer: setujui atau tolak dengan alasan
+// keputusan fotografer (hanya untuk pesanan yang sudah dibayar): setujui, atau tolak dengan alasan + refund
 function applyDecision(tx,decision,reason){
   const now=new Date().toISOString();
   const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Menunggu"}];
-  const upd={approval:decision,decisionReason:reason||"",decidedAt:now,notifRead:false,history:[...base,{time:now,action:decision==="Disetujui"?"Disetujui oleh fotografer":"Ditolak oleh fotografer: "+reason,method:"-",ref:"-",status:decision}]};
+  const hist=[...base,{time:now,action:decision==="Disetujui"?"Disetujui oleh fotografer":"Ditolak oleh fotografer: "+reason,method:"-",ref:"-",status:decision}];
+  const upd={approval:decision,decisionReason:reason||"",decidedAt:now,notifRead:false};
+  if(decision==="Ditolak"){upd.status="Dikembalikan";upd.refundedAt=now;hist.push({time:now,action:"Dana dikembalikan ke pelanggan (simulasi)",method:tx.method,ref:tx.payRef||"-",status:"Dikembalikan"})}
+  upd.history=hist;
   updateDoc(doc(db,"transaksi",tx.id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan keputusan. Cek Rules Firestore.")});
   updateDoc(doc(db,"pesanan_publik",tx.id),{approval:decision}).catch(console.error);
-  showToast(decision==="Disetujui"?`Pesanan ${tx.id} disetujui.`:`Pesanan ${tx.id} ditolak. Pelanggan akan diberi notifikasi.`);
+  showToast(decision==="Disetujui"?`Pesanan ${tx.id} disetujui.`:`Pesanan ${tx.id} ditolak. Pelanggan diberi notifikasi dan dana dikembalikan.`);
 }
 function decideOrder(id,decision){
-  const tx=findTx(id);if(!tx||apr(tx)!=="Menunggu")return;
+  const tx=findTx(id);if(!tx)return;
+  if(!needsAction(tx)){showToast("Pesanan baru bisa diputuskan setelah pelanggan membayar.");return}
   if(decision==="Disetujui"){applyDecision(tx,"Disetujui","");return}
-  askReason({eyebrow:"TOLAK PESANAN",title:"Tolak pesanan ini?",desc:`Pelanggan akan menerima notifikasi untuk tanggal ${dFmt(tx.date)}.`,
+  askReason({eyebrow:"TOLAK PESANAN",title:"Tolak pesanan ini?",desc:`Pelanggan akan menerima notifikasi untuk tanggal ${dFmt(tx.date)} dan dana dikembalikan.`,
     presets:["Jadwal pada tanggal tersebut penuh","Fotografer berhalangan hadir","Lokasi di luar jangkauan","Lainnya"],okLabel:"Tolak Pesanan",
     onConfirm:r=>applyDecision(tx,"Ditolak",r)});
 }
@@ -621,21 +636,22 @@ let pFilter="Menunggu";
 function renderPhotog(){
   if(!$("pgRows"))return;
   const by=a=>cache.filter(t=>apr(t)===a);
-  $("pgPending").textContent=by("Menunggu").length;$("pgApproved").textContent=by("Disetujui").length;$("pgRejected").textContent=by("Ditolak").length;
+  $("pgPending").textContent=cache.filter(needsAction).length;$("pgApproved").textContent=by("Disetujui").length;$("pgRejected").textContent=by("Ditolak").length;
   const dates={};cache.filter(t=>isActive(apr(t))).forEach(t=>{(dates[t.date]=dates[t.date]||[]).push(t)});
   const keys=Object.keys(dates).sort();
   $("pgBusy").textContent=keys.length;
   $("scheduleChips").innerHTML=keys.length?keys.map(d=>{
-    const n=dates[d].length,pend=dates[d].filter(t=>apr(t)==="Menunggu").length;
-    return `<div class="chip-date ${n>=MAX_PER_DAY?"full":""}"><strong>${dFmt(d,{day:"2-digit",month:"short",year:"numeric"})}</strong><span>${n}/${MAX_PER_DAY} pelanggan${n>=MAX_PER_DAY?" · PENUH":""}${pend?` · ${pend} menunggu`:""}</span></div>`;
+    const n=dates[d].length,pend=dates[d].filter(needsAction).length;
+    return `<div class="chip-date ${n>=MAX_PER_DAY?"full":""}"><strong>${dFmt(d,{day:"2-digit",month:"short",year:"numeric"})}</strong><span>${n}/${MAX_PER_DAY} pelanggan${n>=MAX_PER_DAY?" · PENUH":""}${pend?` · ${pend} perlu keputusan`:""}</span></div>`;
   }).join(""):emptyState("📅","Belum ada jadwal","Pesanan yang masuk akan muncul di sini, dikelompokkan per tanggal layanan.");
   document.querySelectorAll("#pgTabs [data-pf]").forEach(b=>b.classList.toggle("active",b.dataset.pf===pFilter));
-  const rows=(pFilter==="Semua"?cache:cache.filter(t=>apr(t)===pFilter)).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const flt={"Menunggu":needsAction,"Disetujui":t=>apr(t)==="Disetujui","Ditolak":t=>apr(t)==="Ditolak","Belum bayar":t=>apr(t)==="Menunggu"&&t.status!=="Lunas","Semua":()=>true};
+  const rows=cache.filter(flt[pFilter]||(()=>true)).slice().sort((a,b)=>a.date.localeCompare(b.date));
   $("pgRows").innerHTML=rows.length?rows.map(t=>{
     const a=apr(t),n=(dates[t.date]||[]).length;
-    const acts=a==="Menunggu"?`<button class="btn primary sm" data-decide="Disetujui" data-id="${escapeHtml(t.id)}">Setujui</button><button class="btn danger sm" data-decide="Ditolak" data-id="${escapeHtml(t.id)}">Tolak</button>`:"";
+    const acts=needsAction(t)?`<button class="btn primary sm" data-decide="Disetujui" data-id="${escapeHtml(t.id)}">Setujui</button><button class="btn danger sm" data-decide="Ditolak" data-id="${escapeHtml(t.id)}">Tolak</button>`:(a==="Menunggu"?`<span class="cell-sub">Menunggu pembayaran pelanggan</span>`:"");
     return `<tr><td>${escapeHtml(t.id)}</td><td>${escapeHtml(t.name)}<span class="cell-sub">${escapeHtml(t.contact)}</span>${t.notes?`<span class="cell-sub">Catatan: ${escapeHtml(t.notes)}</span>`:""}</td><td>${escapeHtml(t.packageName)}</td><td>${dFmt(t.date)}</td><td>${n}/${MAX_PER_DAY}</td><td>${approvalBadge(a)} ${payBadge(t)}</td><td class="act-cell">${acts}<button class="table-action" data-pg-inv="${escapeHtml(t.id)}">Invoice</button></td></tr>`;
-  }).join(""):`<tr><td colspan="7">${emptyState("📥",pFilter==="Menunggu"?"Tidak ada permintaan baru":"Tidak ada data","Permintaan pesanan dari pelanggan akan tampil di sini untuk disetujui atau ditolak.")}</td></tr>`;
+  }).join(""):`<tr><td colspan="7">${emptyState("📥",pFilter==="Menunggu"?"Belum ada pesanan yang perlu diputuskan":"Tidak ada data",pFilter==="Menunggu"?"Pesanan yang sudah dibayar pelanggan akan muncul di sini untuk disetujui atau ditolak.":"Data pada kategori ini akan tampil di sini.")}</td></tr>`;
   document.querySelectorAll("[data-decide]").forEach(b=>b.addEventListener("click",()=>decideOrder(b.dataset.id,b.dataset.decide)));
   document.querySelectorAll("[data-pg-inv]").forEach(b=>b.addEventListener("click",()=>openInvoice(b.dataset.pgInv)));
 }
