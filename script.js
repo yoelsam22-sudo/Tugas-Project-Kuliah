@@ -455,7 +455,27 @@ const wallets=[["gopay","GoPay","#00aa5b"],["ovo","OVO","#4c2a86"],["dana","DANA
 const banks=[["bca","BCA","#0060af","39"],["bri","BRI","#00529c","88"],["mandiri","Mandiri","#003d79","89"],["bni","BNI","#e2711d","98"]];
 let payTxId=null,payGroup="qris",payWallet="gopay",payBank="bca",payPhone="";
 const chip=(n,c)=>`<span class="logo-chip" style="background:${c}">${n}</span>`;
-function openPay(id){payTxId=id;payGroup="qris";$("payModal").classList.add("show");$("payModal").setAttribute("aria-hidden","false");renderPay()}
+const API = "https://lensakita-studio.vercel.app";
+
+async function openPay(id){
+  try{
+    showToast("Menyiapkan pembayaran...");
+    const idToken = await currentUser.getIdToken();
+    const r = await fetch(API+"/api/create-payment",{
+      method:"POST",
+      headers:{"Content-Type":"application/json",Authorization:"Bearer "+idToken},
+      body:JSON.stringify({id})
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(JSON.stringify(d.error));
+    window.snap.pay(d.token,{
+      onSuccess:()=>showToast("Pembayaran berhasil, mengonfirmasi..."),
+      onPending:()=>showToast("Menunggu pembayaran kamu."),
+      onError:()=>showToast("Pembayaran gagal."),
+      onClose:()=>showToast("Popup ditutup. Bisa dilanjutkan dari Pesanan Saya.")
+    });
+  }catch(err){console.error(err);showToast("Gagal membuka pembayaran.")}
+}
 function closePay(){clearInterval(payTimer);$("payModal").classList.remove("show");$("payModal").setAttribute("aria-hidden","true")}
 $("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))closePay()});
 
