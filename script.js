@@ -66,7 +66,7 @@ const rnd = (a,b) => a + Math.random()*(b-a);
 // confetti jatuh (dipakai saat pembayaran Lunas)
 function confetti(x,y,count=40){
   if(reduceMotion)return;
-  const colors=["#2d5a4a","#c9a14a","#e6cf94","#7fa896","#f3e7c3","#1c3a2f"];
+  const colors=["#c8f542","#34d399","#eef5ea","#a6d92a","#13241b","#ffb02e"];
   for(let i=0;i<count;i++){
     const el=document.createElement("span");
     el.className="confetti";
