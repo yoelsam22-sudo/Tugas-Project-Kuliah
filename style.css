@@ -4,26 +4,28 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{scroll-behavior:smooth;scroll-padding-top:96px}
-body{margin:0;color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(900px 500px at 88% -4%,rgba(200,245,66,.10),transparent 60%),radial-gradient(700px 520px at -6% 45%,rgba(52,211,153,.07),transparent 60%),var(--bg);background-attachment:fixed}
+/* background dipindah ke body::before (fixed) supaya tidak digambar ulang tiap scroll */
+body{margin:0;color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;background:var(--bg)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 500px at 88% -4%,rgba(200,245,66,.10),transparent 60%),radial-gradient(700px 520px at -6% 45%,rgba(52,211,153,.07),transparent 60%)}
 a{color:inherit;text-decoration:none}
 h1,h2,h3,h4{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-.03em}
 select option{background:var(--card);color:var(--ink)}
 :focus-visible{outline:2px solid var(--lime);outline-offset:2px}
 
 /* TOPBAR */
-.topbar{height:76px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;background:rgba(7,15,11,.82);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);transition:box-shadow .3s}
+.topbar{height:76px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;background:rgba(7,15,11,.96);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;transition:box-shadow .3s}
 .topbar.scrolled{box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:19px;letter-spacing:-.04em}
 .brand small{display:block;font:500 9px 'JetBrains Mono',monospace;letter-spacing:2px;color:var(--muted);margin-top:2px}
 .brand-icon{display:grid;place-items:center;width:38px;height:38px;background:var(--lime);color:var(--on);border-radius:50%;font-weight:800;font-size:14px;transition:transform .5s}
 .brand:hover .brand-icon{transform:rotate(360deg)}
 .topbar nav{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
-.topbar nav>a{padding:9px 13px;border-radius:10px;transition:.2s}
+.topbar nav>a{padding:9px 13px;border-radius:10px;transition:background-color .2s,color .2s}
 .topbar nav>a:hover{background:var(--card2);color:var(--ink)}
-.nav-login{border:1px solid var(--line);background:var(--card);color:var(--ink);font:700 12px 'Plus Jakarta Sans';padding:10px 16px;border-radius:10px;cursor:pointer;transition:.2s;margin-left:6px}
+.nav-login{border:1px solid var(--line);background:var(--card);color:var(--ink);font:700 12px 'Plus Jakarta Sans';padding:10px 16px;border-radius:10px;cursor:pointer;transition:background-color .2s,border-color .2s,color .2s;margin-left:6px}
 .nav-login:hover{background:var(--lime);border-color:var(--lime);color:var(--on)}
 .nav-user{font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:8px}
-.nav-bell{position:relative;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 11px;cursor:pointer;font-size:14px;line-height:1;margin-left:6px;transition:.2s}
+.nav-bell{position:relative;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 11px;cursor:pointer;font-size:14px;line-height:1;margin-left:6px;transition:border-color .2s}
 .nav-bell:hover{border-color:var(--lime)}
 .nav-bell b{position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--lime);color:var(--on);font:800 10px 'Plus Jakarta Sans';display:grid;place-items:center}
 
@@ -35,7 +37,7 @@ select option{background:var(--card);color:var(--ink)}
 .tiny{font-size:11px;color:var(--muted);line-height:1.6;margin:0}
 
 /* TOMBOL */
-.btn{border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 20px;font:700 13px 'Plus Jakarta Sans';border-radius:12px;transition:.2s}
+.btn{border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 20px;font:700 13px 'Plus Jakarta Sans';border-radius:12px;transition:transform .2s,background-color .2s,border-color .2s,color .2s}
 .btn:hover{transform:translateY(-1px)}
 .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
 .primary{background:var(--lime);color:var(--on);position:relative;overflow:hidden}
@@ -55,22 +57,22 @@ select option{background:var(--card);color:var(--ink)}
 .hero{padding:70px 7% 76px;display:grid;grid-template-columns:1.05fr .95fr;gap:5%;align-items:center;min-height:590px;position:relative;overflow:hidden}
 .hero-copy,.hero-art{position:relative;z-index:1}
 .hero h1{font-size:clamp(36px,4.6vw,62px);font-weight:800;line-height:1.05;letter-spacing:-.045em;margin:0}
-.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--lime),var(--mint),var(--lime));background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:shimmer 6s linear infinite}
-@keyframes shimmer{to{background-position:200% center}}
+/* gradient statis (tanpa animasi shimmer) supaya tidak repaint terus-menerus */
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--lime),var(--mint));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
 .hero-desc{color:var(--muted);line-height:1.8;max-width:480px;font-size:15px;margin:22px 0 28px}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
 .hero-stats{display:flex;gap:12px;margin-top:40px;flex-wrap:wrap}
 .hero-stats div{display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;min-width:118px}
 .hero-stats strong{font-size:19px;font-weight:800;color:var(--lime)}
 .hero-stats span{font-size:11px;color:var(--muted)}
-.hero-art{height:410px;position:relative;max-width:480px;width:100%;margin:auto;transition:transform .25s ease-out}
-.photo{position:absolute;box-shadow:0 30px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:space-between;padding:18px;color:#fff;font:700 9px 'JetBrains Mono',monospace;letter-spacing:2px;border-radius:22px;overflow:hidden}
+.hero-art{height:410px;position:relative;max-width:480px;width:100%;margin:auto;transition:transform .25s ease-out;will-change:transform}
+.photo{position:absolute;box-shadow:0 30px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:space-between;padding:18px;color:#fff;font:700 9px 'JetBrains Mono',monospace;letter-spacing:2px;border-radius:22px;overflow:hidden;will-change:transform}
 .photo::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(5,12,8,.65),transparent 45%)}
 .photo span,.camera-mark{position:relative;z-index:1;text-shadow:0 1px 6px rgba(0,0,0,.4)}
 .photo-back{width:60%;height:76%;top:0;right:2%;transform:rotate(7deg);background:url("foto1.jpg") center/cover no-repeat,linear-gradient(150deg,#2b4a3a,#14281f 60%,#0a1510);animation:floatBack 7s ease-in-out infinite}
 .photo-front{width:58%;height:78%;left:5%;bottom:0;transform:rotate(-7deg);background:url("foto2.jpg") center/cover no-repeat,linear-gradient(155deg,#3a5a2a,#1c3a2f 55%,#0e1b15);border:2px solid var(--lime);animation:floatFront 8s ease-in-out infinite}
 .camera-mark{font-size:30px;color:var(--lime)}
-.floating-note{position:absolute;right:-1%;bottom:15%;background:var(--lime);color:var(--on);padding:13px 18px;border-radius:14px;box-shadow:0 14px 36px rgba(200,245,66,.25);font-weight:800;font-size:14px;transform:rotate(3deg);animation:bobNote 5s ease-in-out infinite}
+.floating-note{position:absolute;right:-1%;bottom:15%;background:var(--lime);color:var(--on);padding:13px 18px;border-radius:14px;box-shadow:0 14px 36px rgba(200,245,66,.25);font-weight:800;font-size:14px;transform:rotate(3deg);animation:bobNote 5s ease-in-out infinite;will-change:transform}
 @keyframes floatBack{0%,100%{transform:rotate(7deg) translateY(0)}50%{transform:rotate(5deg) translateY(-14px)}}
 @keyframes floatFront{0%,100%{transform:rotate(-7deg) translateY(0)}50%{transform:rotate(-5deg) translateY(12px)}}
 @keyframes bobNote{0%,100%{transform:rotate(3deg) translateY(0)}50%{transform:rotate(5deg) translateY(-9px)}}
@@ -81,15 +83,15 @@ select option{background:var(--card);color:var(--ink)}
 
 /* PAKET */
 .package-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.package-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:25px 22px;display:flex;flex-direction:column;min-height:300px;position:relative;cursor:pointer;user-select:none;outline:none;overflow:hidden;transition:transform .2s ease-out,box-shadow .3s,border-color .3s}
+.package-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:25px 22px;display:flex;flex-direction:column;min-height:300px;position:relative;cursor:pointer;user-select:none;outline:none;overflow:hidden;contain:layout paint;transition:transform .2s ease-out,box-shadow .3s,border-color .3s}
 .package-card:hover{border-color:rgba(200,245,66,.5);box-shadow:0 18px 44px rgba(0,0,0,.5);background:radial-gradient(circle 200px at var(--mx,50%) var(--my,50%),rgba(200,245,66,.16),transparent 70%),var(--card)}
 .package-card:focus-visible{box-shadow:0 0 0 3px rgba(200,245,66,.45)}
 .package-card.featured{border-color:rgba(200,245,66,.35)}
 .package-card.selected{border-color:var(--lime);box-shadow:0 0 0 2px rgba(200,245,66,.5),0 16px 38px rgba(0,0,0,.5)}
 .package-card.selected::after{content:"✓ DIPILIH";position:absolute;top:12px;left:12px;z-index:2;background:var(--lime);color:var(--on);font:800 9px 'JetBrains Mono',monospace;letter-spacing:1px;padding:6px 10px;border-radius:8px}
-.package-photo{position:relative;height:150px;margin:-25px -22px 18px;overflow:hidden;background-size:cover;background-position:center;background-image:var(--img),linear-gradient(135deg,#2b4a3a,#14281f 60%,#0a1510);transition:filter .4s,transform .5s}
+.package-photo{position:relative;height:150px;margin:-25px -22px 18px;overflow:hidden;background-size:cover;background-position:center;background-image:var(--img),linear-gradient(135deg,#2b4a3a,#14281f 60%,#0a1510);transition:transform .5s}
 .package-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,var(--card),transparent 70%)}
-.package-card:hover .package-photo{filter:saturate(1.15) brightness(1.08);transform:scale(1.04)}
+.package-card:hover .package-photo{transform:scale(1.04)}
 .pp-photo-event{background-image:var(--img),linear-gradient(135deg,#5a4a2a,#2d4a35 55%,#0e1b15)}
 .pp-video-event{background-image:var(--img),linear-gradient(135deg,#2a5a4a,#14392b 55%,#0a1510)}
 .pp-photo-video{background-image:var(--img),linear-gradient(135deg,#5a6a22,#2d5a35 45%,#0e1b15)}
@@ -114,16 +116,16 @@ select option{background:var(--card);color:var(--ink)}
 .booking-layout{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px}
 .form-panel{display:grid;gap:15px}
-.form-panel label,.dashboard-toolbar label,.pay-detail label,.login-sheet label{display:grid;gap:7px;font-size:12px;font-weight:700;color:var(--muted)}
-.form-panel input,.form-panel select,.form-panel textarea,.dashboard-toolbar select,.login-sheet input,.login-sheet textarea,.login-sheet select,.pay-detail input{width:100%;border:1px solid var(--line);border-radius:12px;background:#0a140f;padding:13px;font:500 13px 'Plus Jakarta Sans';color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
-.form-panel input:focus,.form-panel select:focus,.form-panel textarea:focus,.dashboard-toolbar select:focus,.login-sheet input:focus,.login-sheet textarea:focus,.login-sheet select:focus,.pay-detail input:focus{border-color:var(--lime);box-shadow:0 0 0 3px rgba(200,245,66,.15)}
+.form-panel label,.dashboard-toolbar label,.login-sheet label{display:grid;gap:7px;font-size:12px;font-weight:700;color:var(--muted)}
+.form-panel input,.form-panel select,.form-panel textarea,.dashboard-toolbar select,.login-sheet input,.login-sheet textarea,.login-sheet select{width:100%;border:1px solid var(--line);border-radius:12px;background:#0a140f;padding:13px;font:500 13px 'Plus Jakarta Sans';color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.form-panel input:focus,.form-panel select:focus,.form-panel textarea:focus,.dashboard-toolbar select:focus,.login-sheet input:focus,.login-sheet textarea:focus,.login-sheet select:focus{border-color:var(--lime);box-shadow:0 0 0 3px rgba(200,245,66,.15)}
 .form-panel textarea{resize:vertical}
 .price-line{border-top:1px solid var(--line);padding-top:17px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
 .price-line strong{font-size:28px;font-weight:800;color:var(--lime);letter-spacing:-.04em}
 .slot.ok{color:var(--mint)}
 .slot.full{color:var(--red);font-weight:700}
 .how-panel{padding:34px 36px}
-.step-icon{display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--card2);color:var(--lime);width:36px;height:36px;border-radius:12px;font:700 11px 'JetBrains Mono',monospace;margin-bottom:4px;transition:.3s}
+.step-icon{display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--card2);color:var(--lime);width:36px;height:36px;border-radius:12px;font:700 11px 'JetBrains Mono',monospace;margin-bottom:4px;transition:background-color .3s,color .3s}
 .how-panel:hover .step-icon{background:var(--lime);color:var(--on)}
 .how-panel h3{font-size:18px;font-weight:800;margin:8px 0 6px}
 .how-panel p{font-size:13px;color:var(--muted);line-height:1.7;margin:0 0 22px}
@@ -165,7 +167,7 @@ select option{background:var(--card);color:var(--ink)}
 table{border-collapse:collapse;width:100%;font-size:12px;min-width:760px}
 th{text-align:left;color:var(--muted);font:500 10px 'JetBrains Mono',monospace;letter-spacing:1px;text-transform:uppercase;background:var(--card2)}
 td,th{padding:13px 12px;border-bottom:1px solid var(--line)}
-tbody tr{transition:background .2s}
+tbody tr{transition:background-color .2s}
 tbody tr:hover{background:rgba(200,245,66,.05)}
 .schedule-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
 .chip-date{border:1px solid var(--line);border-radius:14px;padding:13px 15px;background:var(--card2);display:grid;gap:4px}
@@ -174,7 +176,7 @@ tbody tr:hover{background:rgba(200,245,66,.05)}
 .chip-date.full{border-color:rgba(255,107,90,.5);background:rgba(255,107,90,.1)}
 .chip-date.full span{color:var(--red);font-weight:700}
 .filter-tabs{display:flex;gap:6px;flex-wrap:wrap}
-.filter-tabs button{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:7px 14px;font:700 11px 'Plus Jakarta Sans';cursor:pointer;color:var(--muted);transition:.2s}
+.filter-tabs button{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:7px 14px;font:700 11px 'Plus Jakarta Sans';cursor:pointer;color:var(--muted);transition:background-color .2s,color .2s,border-color .2s}
 .filter-tabs button:hover{color:var(--ink)}
 .filter-tabs button.active{background:var(--lime);border-color:var(--lime);color:var(--on)}
 .cell-sub{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
@@ -208,14 +210,14 @@ footer{background:#050b08;border-top:1px solid var(--line);padding:30px 7%;displ
 footer p,footer>a:last-child{font-size:11px;color:var(--muted)}
 footer a:hover{color:var(--lime)}
 
-/* MODAL */
-.modal-backdrop{position:fixed;inset:0;background:rgba(3,8,5,.82);backdrop-filter:blur(6px);z-index:30;display:none;overflow:auto;padding:30px 15px}
+/* MODAL (tanpa backdrop-filter blur supaya ringan) */
+.modal-backdrop{position:fixed;inset:0;background:rgba(3,8,5,.9);z-index:30;display:none;overflow:auto;padding:30px 15px}
 .modal-backdrop.show{display:block;animation:fadeIn .25s ease}
-.modal-backdrop.show .login-sheet,.modal-backdrop.show .invoice-sheet,.modal-backdrop.show .pay-sheet,.modal-backdrop.show .notif-sheet{animation:popIn .35s cubic-bezier(.2,.9,.3,1.2)}
+.modal-backdrop.show .login-sheet,.modal-backdrop.show .invoice-sheet,.modal-backdrop.show .notif-sheet{animation:popIn .35s cubic-bezier(.2,.9,.3,1.2)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes popIn{from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:none}}
-#payModal{z-index:40}#reasonModal{z-index:50}#notifModal{z-index:35}
-.login-sheet,.invoice-sheet,.pay-sheet,.notif-sheet{background:var(--card);color:var(--ink);border:1px solid var(--line);border-top:3px solid var(--lime);border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#reasonModal{z-index:50}#notifModal{z-index:35}
+.login-sheet,.invoice-sheet,.notif-sheet{background:var(--card);color:var(--ink);border:1px solid var(--line);border-top:3px solid var(--lime);border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
 .login-sheet{max-width:400px;margin:8vh auto 0;padding:32px;display:grid;gap:14px}
 .login-sheet h2{margin:0;font-size:28px;font-weight:800}
 .login-sheet .eyebrow{margin:0}
@@ -259,44 +261,6 @@ footer a:hover{color:var(--lime)}
 .stepper li.bad b{background:var(--red);border-color:var(--red);color:#fff}
 .stepper li.bad{color:var(--red);font-weight:700}
 
-/* PEMBAYARAN */
-.pay-sheet{max-width:880px;margin:3vh auto;padding:30px 34px;color:var(--ink)}
-.pay-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}
-.pay-head h2{font-size:36px;font-weight:800;margin:6px 0 2px;color:var(--lime)}
-.pay-head p{font-size:12px;color:var(--muted);margin:0}
-.pay-layout{display:grid;grid-template-columns:270px 1fr;gap:24px;margin-bottom:14px}
-.pay-methods{display:grid;gap:10px;align-content:start}
-.pay-method{display:flex;flex-direction:column;align-items:flex-start;gap:9px;text-align:left;width:100%;border:1px solid var(--line);background:var(--card2);border-radius:14px;padding:14px;cursor:pointer;font:inherit;color:inherit;transition:.2s}
-.pay-method:hover{border-color:rgba(200,245,66,.5)}
-.pay-method.active{border-color:var(--lime);box-shadow:0 0 0 3px rgba(200,245,66,.14);background:rgba(200,245,66,.06)}
-.pay-method strong{font-size:13px}
-.pay-method small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
-.chip-row{display:flex;flex-wrap:wrap;gap:5px}
-.logo-chip{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:24px;padding:0 9px;border-radius:6px;color:#fff;font:700 10px 'Plus Jakarta Sans';letter-spacing:.3px}
-.pay-detail{background:var(--card2);border:1px solid var(--line);border-radius:18px;padding:22px;display:grid;gap:14px;align-content:start}
-.pay-detail-head strong{font-size:19px;font-weight:800}
-.pay-detail-head p{font-size:12px;color:var(--muted);line-height:1.6;margin:4px 0 0}
-.logo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.logo-pick{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 4px;cursor:pointer;display:grid;place-items:center}
-.logo-pick.active{border-color:var(--lime);box-shadow:0 0 0 3px rgba(200,245,66,.14)}
-.va-box{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px dashed var(--lime);border-radius:14px;padding:16px 18px}
-.va-box small{display:block;font-size:10px;color:var(--muted);margin-bottom:4px}
-.va-box span{font:700 20px 'JetBrains Mono',monospace;letter-spacing:1px}
-.pay-steps{margin:0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.9}
-.qris-box{background:#fff;color:#111;border-radius:16px;max-width:280px;margin:16px 0;padding:16px;text-align:center}
-.pay-detail .qris-box{margin:0 auto}
-.qris-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:10px}
-.qris-head strong{background:#c8102e;color:#fff;padding:3px 9px;border-radius:4px;letter-spacing:1px}
-.qris-head span{color:#666;font-weight:700;letter-spacing:1px;font-size:9px}
-.qris-code{position:relative;display:inline-block;overflow:hidden}
-.qris-code::after{content:"";position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#c8102e,transparent);box-shadow:0 0 10px #c8102e;animation:scanLine 2.4s ease-in-out infinite}
-@keyframes scanLine{0%,100%{top:0}50%{top:calc(100% - 3px)}}
-.qris-code svg{width:100%;max-width:200px;height:auto;border:1px solid #eee;display:block}
-.qris-amount{font-size:22px;font-weight:800;margin:10px 0 4px}
-.qris-timer{font-size:11px;color:#666;margin:0 0 8px}
-.link-btn{border:0;background:none;color:var(--lime);font:700 11px 'Plus Jakarta Sans';cursor:pointer;text-decoration:underline}
-.qris-box .link-btn{color:#c8102e}
-
 /* NOTIFIKASI */
 .notif-sheet{max-width:480px;margin:6vh auto;padding:26px 28px}
 .notif-sheet h3{font-size:24px;font-weight:800;margin:0 0 14px}
@@ -308,11 +272,12 @@ footer a:hover{color:var(--lime)}
 .notif-item>span{font-size:10.5px;color:var(--muted)}
 
 /* TOAST & EFEK */
-.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;background:var(--lime);color:var(--on);padding:13px 22px;border-radius:12px;font:700 13px 'Plus Jakarta Sans';z-index:70;transition:.25s;pointer-events:none;box-shadow:0 14px 36px rgba(0,0,0,.5)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;background:var(--lime);color:var(--on);padding:13px 22px;border-radius:12px;font:700 13px 'Plus Jakarta Sans';z-index:70;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 14px 36px rgba(0,0,0,.5)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .confetti{position:fixed;z-index:60;pointer-events:none;border-radius:2px;will-change:transform,opacity}
-#scrollBar{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--lime),var(--mint));z-index:60;transition:width .1s}
-.cursor-glow{position:fixed;top:0;left:0;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(200,245,66,.13),rgba(52,211,153,.05) 45%,transparent 70%);pointer-events:none;z-index:5;opacity:0;transition:opacity .3s}
+/* progress scroll pakai transform (GPU), bukan width */
+#scrollBar{position:fixed;top:0;left:0;height:3px;width:100%;transform:scaleX(0);transform-origin:left;background:linear-gradient(90deg,var(--lime),var(--mint));z-index:60;will-change:transform;pointer-events:none}
+.cursor-glow{position:fixed;top:0;left:0;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(200,245,66,.13),rgba(52,211,153,.05) 45%,transparent 70%);pointer-events:none;z-index:5;opacity:0;transition:opacity .3s;will-change:transform}
 .reveal{opacity:0;transform:translateY(20px)}
 .reveal.in{opacity:1;transform:none;transition:opacity .7s ease var(--d,0s),transform .7s ease var(--d,0s)}
 .welcome{position:fixed;inset:0;z-index:100;pointer-events:none;opacity:0;background:linear-gradient(160deg,#10281b,#050b08);transition:opacity .3s ease}
@@ -332,7 +297,6 @@ body.is-photog #beranda,body.is-photog #layanan,body.is-photog #artikel,body.is-
   .section,.booking-section,.dashboard-section{padding-left:6%;padding-right:6%}
   .manual-grid{grid-template-columns:repeat(2,1fr)}
   .feed-list{grid-template-columns:repeat(2,1fr)}
-  .pay-layout{grid-template-columns:1fr}
   .summary-grid.four{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:650px){
@@ -351,9 +315,10 @@ body.is-photog #beranda,body.is-photog #layanan,body.is-photog #artikel,body.is-
   .invoice-head{flex-direction:column}
   .invoice-meta{grid-template-columns:1fr}
   .invoice-total{width:100%}
-  .pay-sheet{padding:22px 18px}
-  .logo-grid{grid-template-columns:repeat(2,1fr)}
   .stepper li{font-size:9.5px}
+  /* di HP: matikan animasi dekoratif yang berat */
+  .photo-back,.photo-front,.floating-note{animation:none}
+  .cursor-glow{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -365,9 +330,10 @@ body.is-photog #beranda,body.is-photog #layanan,body.is-photog #artikel,body.is-
   @page{size:A4;margin:14mm}
   :root{--bg:#fff;--card:#fff;--card2:#f4f4f0;--line:#ddd;--ink:#111;--muted:#555;--lime:#1c3a2f;color-scheme:light}
   body{background:#fff!important;color:#111}
+  body::before{display:none}
   body *{visibility:hidden!important}
   .modal-backdrop,.modal-backdrop *{visibility:visible!important}
-  .modal-backdrop{position:absolute;inset:0;padding:0;background:#fff;display:block!important;overflow:visible;backdrop-filter:none}
+  .modal-backdrop{position:absolute;inset:0;padding:0;background:#fff;display:block!important;overflow:visible}
   #loginModal,#payModal,#reasonModal,#notifModal,.confetti,.cursor-glow,#scrollBar{display:none!important}
   .invoice-sheet{box-shadow:none;border:0;border-radius:0;max-width:none;margin:0;padding:0;min-height:0;animation:none;background:#fff;color:#111}
   .modal-actions,.payment-box,.payment-box button,.payment-controls{display:none!important}
