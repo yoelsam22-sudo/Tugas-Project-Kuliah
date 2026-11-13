@@ -24,7 +24,6 @@ let cache = [];            // semua transaksi (khusus admin)
 let myCache = [];          // transaksi milik user yang login
 let publicCache = [];      // feed pesanan publik (nama disamarkan)
 const localTx = new Map(); // pesanan yang baru dibuat di browser ini
-const qrExpiry = new Map();
 let isAdmin = false;
 let isPhotog = false;
 let notifPrev = new Map();
@@ -32,8 +31,6 @@ let firstMine = true;
 let currentUser = null;
 let unsubscribe = null;
 let unsubMine = null;
-let qrTimer = null;
-let payTimer = null;
 let currentInvoiceId = null;
 
 const packages = [
@@ -50,7 +47,11 @@ function loadTransactions(){return cache}
 function findTx(id){return cache.find(t=>t.id===id)||myCache.find(t=>t.id===id)||localTx.get(id)}
 function invoiceNumber(){return "LK-"+new Date().getFullYear()+String(Date.now()).slice(-6)}
 function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function showToast(message){$("toast").textContent=message;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)}
+let toastTimer=null;
+function showToast(message){
+  const t=$("toast");t.textContent=message;t.classList.add("show");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2600);
+}
 
 /* ================= HELPER PERAN & STATUS ================= */
 const emailIn=(list,e)=>list.includes(String(e||"").toLowerCase());
@@ -59,11 +60,11 @@ const apr=t=>t.approval||"Disetujui"; // pesanan lama tanpa status dianggap dise
 const isActive=a=>a==="Menunggu"||a==="Disetujui";
 const dFmt=(d,o={day:"2-digit",month:"long",year:"numeric"})=>new Date(d+"T00:00:00").toLocaleDateString("id-ID",o);
 
-/* ================= EFEK VISUAL ================= */
+/* ================= EFEK VISUAL (sudah dioptimasi) ================= */
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const rnd = (a,b) => a + Math.random()*(b-a);
 
-// confetti jatuh (dipakai saat pembayaran Lunas)
+// confetti jatuh (dipakai saat pembayaran berhasil)
 function confetti(x,y,count=40){
   if(reduceMotion)return;
   const colors=["#c8f542","#34d399","#eef5ea","#a6d92a","#13241b","#ffb02e"];
@@ -108,15 +109,20 @@ function syncSelectedCard(){
 
 function setupPackageEffects(){
   document.querySelectorAll(".package-card").forEach(card=>{
+    let rect=null,raf=0,px=.5,py=.5;
+    card.addEventListener("mouseenter",()=>{rect=card.getBoundingClientRect()});
     card.addEventListener("mousemove",e=>{
-      const r=card.getBoundingClientRect();
-      const px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
-      card.style.setProperty("--mx",(px*100)+"%");
-      card.style.setProperty("--my",(py*100)+"%");
-      if(reduceMotion)return;
-      card.style.transform=`perspective(700px) rotateX(${(.5-py)*8}deg) rotateY(${(px-.5)*8}deg) translateY(-4px)`;
+      if(!rect)rect=card.getBoundingClientRect();
+      px=(e.clientX-rect.left)/rect.width;py=(e.clientY-rect.top)/rect.height;
+      if(raf)return; // satu update per frame saja
+      raf=requestAnimationFrame(()=>{
+        raf=0;
+        card.style.setProperty("--mx",(px*100)+"%");
+        card.style.setProperty("--my",(py*100)+"%");
+        if(!reduceMotion)card.style.transform=`perspective(700px) rotateX(${(.5-py)*8}deg) rotateY(${(px-.5)*8}deg) translateY(-4px)`;
+      });
     });
-    card.addEventListener("mouseleave",()=>{card.style.transform=""});
+    card.addEventListener("mouseleave",()=>{rect=null;card.style.transform=""});
     card.addEventListener("click",e=>onPackageClick(card,e.clientX,e.clientY));
     card.addEventListener("keydown",e=>{
       if(e.key!=="Enter"&&e.key!==" ")return;
@@ -149,12 +155,14 @@ function setupReveal(){
 
 function setupHeroEffects(){
   const hero=document.querySelector(".hero"),art=document.querySelector(".hero-art");
-  if(!hero||reduceMotion)return;
+  if(!hero||!art||reduceMotion)return;
   // foto hero bergeser pelan mengikuti mouse
+  let raf=0,x=0,y=0;
   hero.addEventListener("mousemove",e=>{
     const r=hero.getBoundingClientRect();
-    const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
-    art.style.transform=`translate3d(${x*-18}px,${y*-14}px,0)`;
+    x=(e.clientX-r.left)/r.width-.5;y=(e.clientY-r.top)/r.height-.5;
+    if(raf)return;
+    raf=requestAnimationFrame(()=>{raf=0;art.style.transform=`translate3d(${x*-18}px,${y*-14}px,0)`});
   });
   hero.addEventListener("mouseleave",()=>{art.style.transform=""});
 }
@@ -162,18 +170,29 @@ function setupHeroEffects(){
 function setupGlobalEffects(){
   // progress bar scroll + bayangan navbar
   const bar=document.createElement("div");bar.id="scrollBar";document.body.appendChild(bar);
-  const topbar=document.querySelector(".topbar");
+  const topbar=document.querySelector(".topbar"),h=document.documentElement;
+  let ticking=false,scrolled=false;
   const onScroll=()=>{
-    const h=document.documentElement,max=h.scrollHeight-h.clientHeight;
-    bar.style.width=(max>0?(h.scrollTop/max)*100:0)+"%";
-    topbar.classList.toggle("scrolled",h.scrollTop>10);
+    if(ticking)return;ticking=true;
+    requestAnimationFrame(()=>{
+      ticking=false;
+      const max=h.scrollHeight-h.clientHeight;
+      bar.style.transform=`scaleX(${max>0?h.scrollTop/max:0})`;
+      const s=h.scrollTop>10;
+      if(s!==scrolled){scrolled=s;topbar.classList.toggle("scrolled",s)}
+    });
   };
   addEventListener("scroll",onScroll,{passive:true});onScroll();
 
   // cahaya lembut mengikuti kursor (hanya perangkat dengan mouse)
   if(window.matchMedia("(hover:hover)").matches&&!reduceMotion){
     const glow=document.createElement("div");glow.className="cursor-glow";document.body.appendChild(glow);
-    addEventListener("mousemove",e=>{glow.style.transform=`translate(${e.clientX-150}px,${e.clientY-150}px)`;glow.style.opacity=1},{passive:true});
+    let raf=0,gx=0,gy=0;
+    addEventListener("mousemove",e=>{
+      gx=e.clientX-150;gy=e.clientY-150;
+      if(raf)return;
+      raf=requestAnimationFrame(()=>{raf=0;glow.style.transform=`translate3d(${gx}px,${gy}px,0)`;glow.style.opacity=1});
+    },{passive:true});
     document.addEventListener("mouseleave",()=>{glow.style.opacity=0});
   }
 }
@@ -400,22 +419,6 @@ $("closeInvoice").addEventListener("click",closeInvoice);
 $("invoiceModal").addEventListener("click",e=>{if(e.target===$("invoiceModal"))closeInvoice()});
 $("printInvoice").addEventListener("click",()=>window.print());
 
-// QR simulasi (bukan QRIS asli): pola dibuat dari nomor invoice
-function fakeQrSvg(seed){
-  const N=25,cell=8;let h=2166136261;
-  for(const c of seed){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}
-  const rand=()=>{h^=h<<13;h^=h>>>17;h^=h<<5;return (h>>>0)/4294967296};
-  const inFinder=(r,c)=>[[0,0],[0,N-7],[N-7,0]].some(([fr,fc])=>r>=fr-1&&r<=fr+7&&c>=fc-1&&c<=fc+7);
-  let rects="";
-  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
-    if(inFinder(r,c))continue;
-    if(rand()>0.52)rects+=`<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}"/>`;
-  }
-  const finder=(fr,fc)=>`<rect x="${fc*cell}" y="${fr*cell}" width="${7*cell}" height="${7*cell}"/><rect x="${(fc+1)*cell}" y="${(fr+1)*cell}" width="${5*cell}" height="${5*cell}" fill="#fff"/><rect x="${(fc+2)*cell}" y="${(fr+2)*cell}" width="${3*cell}" height="${3*cell}"/>`;
-  return `<svg viewBox="0 0 ${N*cell} ${N*cell}" xmlns="http://www.w3.org/2000/svg" fill="#111" role="img" aria-label="QR simulasi"><rect width="100%" height="100%" fill="#fff"/>${rects}${finder(0,0)}${finder(0,N-7)}${finder(N-7,0)}</svg>`;
-}
-function fmtCountdown(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
-
 function stepperHtml(tx){
   const a=apr(tx),paidEver=tx.status==="Lunas"||tx.status==="Dikembalikan",closed=a==="Ditolak"||a==="Dibatalkan";
   const s2=`<li class="${paidEver?"done":(closed?"":"now")}"><b>${paidEver?"✓":"2"}</b><span>${paidEver?"Pembayaran diterima":"Menunggu pembayaran"}</span></li>`;
@@ -453,11 +456,7 @@ function renderInvoice(tx){
   if($("newOrder"))$("newOrder").addEventListener("click",()=>{closeInvoice();location.hash="#pesan"});
 }
 
-/* ----- tampilan pembayaran cashless (QRIS, e-wallet, virtual account) ----- */
-const wallets=[["gopay","GoPay","#00aa5b"],["ovo","OVO","#4c2a86"],["dana","DANA","#118eea"],["shopeepay","ShopeePay","#ee4d2d"]];
-const banks=[["bca","BCA","#0060af","39"],["bri","BRI","#00529c","88"],["mandiri","Mandiri","#003d79","89"],["bni","BNI","#e2711d","98"]];
-let payTxId=null,payGroup="qris",payWallet="gopay",payBank="bca",payPhone="";
-const chip=(n,c)=>`<span class="logo-chip" style="background:${c}">${n}</span>`;
+/* ================= PEMBAYARAN (MIDTRANS SNAP LEWAT BACKEND VERCEL) ================= */
 const API = "https://lensakita-studio.vercel.app";
 
 async function openPay(id){
@@ -472,95 +471,16 @@ async function openPay(id){
     const d = await r.json();
     if(!r.ok) throw new Error(JSON.stringify(d.error));
     window.snap.pay(d.token,{
-      onSuccess:()=>showToast("Pembayaran berhasil, mengonfirmasi..."),
+      onSuccess:()=>{showToast("Pembayaran berhasil, mengonfirmasi...");confetti(window.innerWidth/2,window.innerHeight*0.35)},
       onPending:()=>showToast("Menunggu pembayaran kamu."),
       onError:()=>showToast("Pembayaran gagal."),
       onClose:()=>showToast("Popup ditutup. Bisa dilanjutkan dari Pesanan Saya.")
     });
   }catch(err){console.error(err);showToast("Gagal membuka pembayaran.")}
 }
-function closePay(){clearInterval(payTimer);$("payModal").classList.remove("show");$("payModal").setAttribute("aria-hidden","true")}
-$("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))closePay()});
-
-function renderPay(){
-  clearInterval(payTimer);
-  const tx=findTx(payTxId);if(!tx){closePay();return}
-  const w=wallets.find(x=>x[0]===payWallet),bk=banks.find(x=>x[0]===payBank);
-  const vaNo=bk[3]+"0"+tx.id.replace(/\D/g,"").padStart(12,"0");
-  let detail="";
-  if(payGroup==="qris"){
-    if(!qrExpiry.has(tx.id))qrExpiry.set(tx.id,Date.now()+15*60*1000);
-    detail=`<div class="pay-detail-head"><strong>Bayar dengan QRIS</strong><p>Scan kode QR memakai aplikasi e-wallet atau mobile banking apa pun.</p></div>
-      <div class="qris-box"><div class="qris-head"><strong>QRIS</strong><span>LENSAKITA STUDIO</span></div><div class="qris-code">${fakeQrSvg(tx.id)}</div><div class="qris-amount">${money(tx.price)}</div><p class="qris-timer">Berlaku <strong id="qrisTimer">15:00</strong> <button type="button" class="link-btn" id="refreshQr">Perbarui QR</button></p></div>
-      <button class="btn primary" id="payConfirm">Simulasikan Scan & Bayar</button>`;
-  }else if(payGroup==="ewallet"){
-    detail=`<div class="pay-detail-head"><strong>Bayar dengan E-Wallet</strong><p>Pilih dompet digital, lalu masukkan nomor HP yang terdaftar.</p></div>
-      <div class="logo-grid">${wallets.map(x=>`<button type="button" class="logo-pick ${x[0]===payWallet?"active":""}" data-wallet="${x[0]}">${chip(x[1],x[2])}</button>`).join("")}</div>
-      <label>Nomor HP ${w[1]}<input id="payPhone" inputmode="numeric" maxlength="14" placeholder="08xxxxxxxxxx" value="${escapeHtml(payPhone)}"></label>
-      <button class="btn primary" id="payConfirm">Bayar ${money(tx.price)} dengan ${w[1]}</button>`;
-  }else{
-    detail=`<div class="pay-detail-head"><strong>Transfer Virtual Account</strong><p>Pilih bank, lalu transfer ke nomor virtual account di bawah.</p></div>
-      <div class="logo-grid">${banks.map(x=>`<button type="button" class="logo-pick ${x[0]===payBank?"active":""}" data-bank="${x[0]}">${chip(x[1],x[2])}</button>`).join("")}</div>
-      <div class="va-box"><div><small>Nomor Virtual Account ${bk[1]}</small><span>${vaNo}</span></div><button type="button" class="link-btn" id="copyVa">Salin</button></div>
-      <ol class="pay-steps"><li>Buka aplikasi mobile banking ${bk[1]}.</li><li>Pilih Transfer, lalu Virtual Account.</li><li>Masukkan nomor di atas dan nominal ${money(tx.price)}.</li></ol>
-      <button class="btn primary" id="payConfirm">Simulasikan Transfer</button>`;
-  }
-  const group=(id,logos,title,sub)=>`<button type="button" class="pay-method ${payGroup===id?"active":""}" data-group="${id}"><div class="chip-row">${logos}</div><div><strong>${title}</strong><small>${sub}</small></div></button>`;
-  $("payContent").innerHTML=`
-    <div class="pay-head"><div><span class="invoice-label">PAYMENT GATEWAY · SIMULASI CASHLESS</span><h2>${money(tx.price)}</h2><p>Invoice ${escapeHtml(tx.id)} · ${escapeHtml(tx.packageName)}</p></div><button class="btn ghost" id="closePay">Tutup</button></div>
-    <div class="pay-layout">
-      <div class="pay-methods">
-        ${group("qris",chip("QRIS","#c8102e"),"QRIS","Scan dengan aplikasi apa pun")}
-        ${group("ewallet",wallets.map(x=>chip(x[1],x[2])).join(""),"E-Wallet","GoPay, OVO, DANA, ShopeePay")}
-        ${group("va",banks.map(x=>chip(x[1],x[2])).join(""),"Virtual Account","BCA, BRI, Mandiri, BNI")}
-      </div>
-      <div class="pay-detail">${detail}</div>
-    </div>
-    <p class="invoice-note">Tanpa pembayaran tunai. Setelah bayar, pesanan menunggu persetujuan fotografer; jika ditolak, dana dikembalikan otomatis. Ini simulasi dan tidak memotong saldo sungguhan.</p>`;
-  $("closePay").onclick=closePay;
-  document.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{payGroup=b.dataset.group;renderPay()});
-  document.querySelectorAll("[data-wallet]").forEach(b=>b.onclick=()=>{payPhone=$("payPhone")?.value||payPhone;payWallet=b.dataset.wallet;renderPay()});
-  document.querySelectorAll("[data-bank]").forEach(b=>b.onclick=()=>{payBank=b.dataset.bank;renderPay()});
-  $("payConfirm").onclick=()=>confirmPay(tx.id);
-  if($("copyVa"))$("copyVa").onclick=()=>{navigator.clipboard?.writeText(vaNo).then(()=>showToast("Nomor virtual account disalin.")).catch(()=>showToast("Salin manual: "+vaNo))};
-  if(payGroup==="qris"){
-    const tick=()=>{
-      const left=qrExpiry.get(tx.id)-Date.now(),t=$("qrisTimer"),btn=$("payConfirm");if(!t)return;
-      if(left<=0){t.textContent="KEDALUWARSA";if(btn)btn.disabled=true;return}
-      t.textContent=fmtCountdown(left);
-    };
-    $("refreshQr").onclick=()=>{qrExpiry.set(tx.id,Date.now()+15*60*1000);$("payConfirm").disabled=false;tick();showToast("QR diperbarui.")};
-    tick();payTimer=setInterval(tick,1000);
-  }
-}
-
-async function confirmPay(id){
-  const tx=findTx(id);if(!tx)return;
-  if(!isActive(apr(tx))||tx.status==="Lunas"){showToast("Pesanan ini tidak dapat dibayar.");return}
-  let method;
-  if(payGroup==="qris")method="QRIS (simulasi)";
-  else if(payGroup==="ewallet"){
-    const phone=($("payPhone").value||"").trim();
-    if(!/^\d{9,14}$/.test(phone)){showToast("Masukkan nomor HP yang valid (9 sampai 14 digit).");return}
-    payPhone=phone;method=`E-Wallet ${wallets.find(x=>x[0]===payWallet)[1]} (simulasi)`;
-  }else method=`Virtual Account ${banks.find(x=>x[0]===payBank)[1]} (simulasi)`;
-  const btn=$("payConfirm");btn.disabled=true;btn.textContent="Memverifikasi pembayaran...";
-  await new Promise(r=>setTimeout(r,1600));
-  await markPaid(tx,method);
-  closePay();
-}
-async function markPaid(tx,method){
-  const now=new Date().toISOString();
-  const ref="PAY-"+Math.random().toString(36).slice(2,8).toUpperCase();
-  const base=(tx.history&&tx.history.length)?tx.history:[{time:tx.createdAt,action:"Pesanan dibuat",method:"-",ref:"-",status:"Belum dibayar"}];
-  const upd={status:"Lunas",method,paidAt:now,payRef:ref,history:[...base,{time:now,action:"Pembayaran diterima, menunggu persetujuan fotografer",method,ref,status:"Lunas"}]};
-  updateDoc(doc(db,"transaksi",tx.id),upd).catch(err=>{console.error(err);showToast("Gagal menyimpan pembayaran.")});
-  updateDoc(doc(db,"pesanan_publik",tx.id),{status:"Lunas"}).catch(console.error);
-  const updated={...tx,...upd};
-  localTx.set(tx.id,updated);
-  renderInvoice(updated);showToast("Pembayaran berhasil. Pesanan menunggu persetujuan fotografer.");
-  confetti(window.innerWidth/2,window.innerHeight*0.35);
-}
+// modal pembayaran lama (simulasi) sudah tidak dipakai, fungsi ini dipertahankan supaya pemanggilnya tetap aman
+function closePay(){const m=$("payModal");if(!m)return;m.classList.remove("show");m.setAttribute("aria-hidden","true")}
+if($("payModal"))$("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))closePay()});
 
 /* ----- jendela alasan (dipakai untuk pembatalan & penolakan) ----- */
 let reasonCb=null;
